@@ -1,0 +1,50 @@
+'''
+Mapping variables's long name to short name according to Nomenclature in DHI-Wando-Gumil report (p6-8)
+
+
+@Author: Le Thi Trang
+@Date: Jan 23, 2026
+'''
+
+# TODO: Later change or add more variables to this dictionary
+# Mapping current available variables for naimg column in dataframe. 
+# E.g., used in measurements from different stations and provider
+# Adding more variables later
+
+
+mapping_var_names = {
+    # KMA stations
+    'station_code':'지점',
+    'timestamp_kma':'일시',
+    'water_temp_name':'수온(°C)',
+    'Hmax':'최대파고(m)',
+    'Hm0':'유의파고(m)',
+    'Hmean':'평균파고(m)',
+    'Twave':'파주기(sec)',
+
+    # KHOA stations
+    'ws':'풍속(m/s)',
+    'wd':'풍향(deg)',
+    'timestamp_khoa':'관측시간'
+
+}
+
+#%% Criteria for filtering wrong or bad data from measurements
+# Refer to DHI Wando-Gumil section 2.2.1. Measurement's data quality and filtering
+# Need to change according to study site
+# Data outside of the following limits are being removed
+
+mapping_QAed = {
+    # KMA stations
+    'wl':[-5, 5], # water level [mMSL]
+    'Hm0':[0, 12], # significant wave height [m]
+    'Tp':[0, 30], # peak wave interval [s]
+    'cs':[0, 2], # current speed [m/s]
+    'ws':[0, 60], # wind speed [m/s]
+    'direction': [0, 360], # directional data, degree
+    'num_bad_sector': [0, 60],
+    'roll_var': [-5, 5], # roll variability, degree
+    'pitch_var': [-5, 5] # pitch variability, degree
+
+}
+
