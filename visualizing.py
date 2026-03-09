@@ -144,7 +144,7 @@ def truncate_colormap(cmap_name, minval=0.0, maxval=1.0, n=100):
 
 
 # Jan 26, 2026
-def scatter_plot_ERA5_against_meas(data, axis_lims, bin_width, fig_title):
+def scatter_plot_ERA5_against_meas(data, axis_lims, bin_width, fig_title, path_save):
     '''
     Scatter plot of ERA5 against measurements for checking ERA5 validity as a 
     reliable source to force the hydrodynamic and wave models for FEED metocean study

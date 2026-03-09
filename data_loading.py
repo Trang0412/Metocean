@@ -12,7 +12,7 @@ import numpy as np
 import glob
 from pathlib import Path
 pd.set_option('future.no_silent_downcasting', True)
-
+from metadata import *
 
 
 def load_era5_data(dir_data, var_name, year=2024):
@@ -22,7 +22,7 @@ def load_era5_data(dir_data, var_name, year=2024):
 
     Parameter
         -dir_data: str, directory to saved ERA5 data
-        -var_name: str, name of variable to load
+        -var_name: str, name of variable to load, e.g., wind_10m_u_v
         -year: integer, year of data measurement     
 
     Return
@@ -82,7 +82,7 @@ def load_era5_data(dir_data, var_name, year=2024):
 
 
 
-def load_meas_data(dir_data, station, list_vars, type_dict, year=2024):
+def load_meas_data(dir_data, provider, station, year=2024):
     '''
     Load yearly measurement data for a certain year in specified station
     Assuming data were measured for full 12-month in year
@@ -100,49 +100,45 @@ def load_meas_data(dir_data, station, list_vars, type_dict, year=2024):
 
     '''
 
-    data_year = pd.DataFrame(columns=list_vars)
+    # data_year = pd.DataFrame(columns=list_vars)
     # data_year = data_year.astype(type_dict)
 
-    if 'KHOA' in station:
-        
-        dir_station = dir_data + station + '\\'
-        #folder name with provider always in format of Provider_Station.
-        #e.g., KHOA_제주
-        station_name = station.split('_')[1] 
-        
-        dir_year = dir_station + str(year) + '\\'
+    # global kma_wind_vars
+    # global khoa_wind_vars
+    
+    # global kma_wind_type_dict
+    # global khoa_wind_type_dict
+    
 
+    dir_station = dir_data +  provider + '\\' + station + '\\'
+
+    if provider == 'KHOA':
         # extract postfix of the name then loop through each month
         # name of file are different in month when data were measured
         # 2013년 11월 제주 조위관측소.txt'
-        filename_postfix = f'{station_name} 조위관측소.txt' # currently set fixed for KHOA station
+        filename_postfix = f'{station} 조위관측소.txt' # currently set fixed for KHOA station
         
-        for month in np.arange(1,13,1):
-            if month<10:
-                filename = f'{year}년 0{month}월 {filename_postfix}'
-            else:
-                filename = f'{year}년 {month}월 {filename_postfix}'
+        filename = f'{year}년 {filename_postfix}'
 
-            try:
-                data_month = pd.read_csv(dir_year + filename, sep='\t', skiprows=3,)
-            except:
-                data_month = pd.read_csv(dir_year + filename, sep='\t', skiprows=3,header=0, encoding='cp949')
+        try:
+            data = pd.read_csv(dir_station + filename, sep='\t', skiprows=3,)
+        except:
+            data = pd.read_csv(dir_station + filename, sep='\t', skiprows=3,header=0, encoding='cp949')
 
-            data_month = data_month.replace('-',np.nan) 
-            
-            data_year = pd.concat([data_year, data_month[list_vars]], axis=0, ignore_index=True) 
+        data = data.replace('-', np.nan) 
+        data = data[khoa_wind_vars]
+        data = data.astype(khoa_wind_type_dict)
+        
 
-            del data_month
+    elif provider == 'KMA':
 
-    elif 'KMA' in station:
-
-        dir_station = dir_data + station + '\\'
         path_station = Path(dir_station)
-
         matching_files = list(path_station.glob(f'*_{year}_*'))
-        data_year = pd.read_csv(matching_files[0], sep=',', header=0, encoding='cp949')
-        # data_year = data_year.replace('-',np.nan) 
-        
 
-    return data_year.astype(type_dict)
+        data = pd.read_csv(matching_files[0], sep=',', header=0, encoding='cp949')
+        data = data.replace('-', np.nan) 
+        data = data[kma_wind_vars]
+        data = data.astype(kma_wind_type_dict)
+
+    return data
 

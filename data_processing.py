@@ -11,15 +11,17 @@ import numpy as np
 import pandas as pd
 
 
-def compute_avg_wind_speed(ws_data, min_to_avg, verbose=0):
+def compute_avg_wind_speed(wind_data, min_to_avg, data_interval, verbose=0):
     '''
     Compute 10-minute average wind speed from 1-minute interval data measured at KHOA stations
 
     Parameters:
-        ws_data: pd.DataFrame, with 2 colum,    
+        ws_data: pd.DataFrame, with 3 colums,    
                 1st: time measured with 1-min resolution
                 2nd: wind speed in unit of m/s 
+                3rd: wind direction in unit of degree
         min_to_avg: int, number of minutes that data be averaged out
+        data_interval: int, interval of data in minutes (e.g., 1, 5, 60 minutes)
         verbose: int, for later used as indicating sampling scheme for quantizing data (DNV, 2.3.1.4)
                 Currently, average data are calculated from only one period every hour
 
@@ -30,15 +32,15 @@ def compute_avg_wind_speed(ws_data, min_to_avg, verbose=0):
          
 
     '''
-    columns_name = ws_data.columns
+    columns_name = wind_data.columns
 
-    points_per_hour = 60
+    points_per_hour = int(60 / data_interval) # for data with 1-min interval 
 
     #########################################################################
     # TODO: Sampling scheme. later, need to change according to use input
 
-    points_avg_per_hour = 1 # taking average for only one period every 1 hour
-    total_points = int(ws_data.shape[0]/points_per_hour) * points_avg_per_hour # compute number of returned data points 
+    times_avg_per_hour = 1 # taking average for only one period every 1 hour
+    total_points = int(wind_data.shape[0]/points_per_hour) * times_avg_per_hour # compute number of returned data points 
 
     # always taking same part of data in 1 hour. 
     # E.g., always taking first 10 minutes in that hour for computing average wind speed
@@ -48,14 +50,14 @@ def compute_avg_wind_speed(ws_data, min_to_avg, verbose=0):
     ws_avg = np.zeros(total_points)
     idx_count = 0
     count = 0
-    while count < ws_data.shape[0]:
+    while count < wind_data.shape[0]:
 
-        ws_avg[idx_count] = ws_data.iloc[count:(idx_count+1)*points_per_hour,1].loc[count+taken_mins].mean()
+        ws_avg[idx_count] = wind_data.iloc[count:(idx_count+1)*points_per_hour,1].loc[count+taken_mins].mean()
         idx_count = idx_count+1
         count = count + points_per_hour
 
     ws_avg = pd.DataFrame(ws_avg, columns=[columns_name[1]]).round(2) # keep 2 number after decimal point
-    ws_avg[columns_name[0]] = ws_data.iloc[0:-1:points_per_hour,0].values # adding time data back to dataframe
+    ws_avg[columns_name[0]] = wind_data.iloc[0:-1:points_per_hour,0].values # adding time data back to dataframe
 
     return ws_avg.iloc[:,[1,0]]
 
