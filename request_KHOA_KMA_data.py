@@ -8,16 +8,17 @@ from datetime import datetime
 # USER SETTINGS
 # ==============================
 service_key = "950fb465225d3909c46d9f7bac904b06f9ef1053d27c3b5ffd998425bf290dac"   # 일반 인증키 (NOT encoded)
-path_save = r"D:\InProbation\Metocean\Data\Observations\KMA_신산"
+path_save = r"D:\InProbation\Metocean\Data\Observations\1hr_tide"
 
-stn_id = "22495"          
-# stn_name = "Seongsanpo"
+stn_id = "DT_0022"          
+# stn_name = "성산포"
 
-start_year = 1974
+start_year = 2000
 end_year = 2026
 # end_year = datetime.now().year - 1
 
-base_url = "http://apis.data.go.kr/1360000/AsosHourlyInfoService/getWthrDataList"
+#base_url = "http://apis.data.go.kr/1360000/AsosHourlyInfoService/getWthrDataList"
+base_url = "https://apis.data.go.kr/1192136/hourlyTide/GetHourlyTideApiService"
 num_of_rows = 999
 
 os.makedirs(path_save, exist_ok=True)
@@ -33,13 +34,12 @@ def get_year_data(year):
         params = {
             "serviceKey": service_key,
             "dataType": "JSON",
-            "dataCd": "ASOS",
             "dateCd": "HR",
             "startDt": f"{year}0101",
             "startHh": "00",
             "endDt": f"{year}1231",
             "endHh": "23",
-            "stnIds": stn_id,
+            "obsCode": stn_id,
             "numOfRows": num_of_rows,
             "pageNo": page
         }
@@ -92,7 +92,7 @@ for year in range(start_year, end_year + 1):
 
         out_file = os.path.join(
             path_save,
-            f"ASOS_{df["stnNm"][0]}_{stn_id}_{year}.xlsx"
+            f"{stn_id}_{year}.xlsx"
         )
 
         df.to_excel(out_file, index=False)

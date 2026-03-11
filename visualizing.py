@@ -22,7 +22,7 @@ plt.rc
 
 
 
-def plot_time_series_scatter(data, x_label, y_label, fig_title=""):
+def plot_time_series_1var(data, x_label, y_label, fig_size=[6.4, 4.8], fig_title="", fname_save="", txt_box_loc = [1.1, 1.1]):
     '''
     Time series scatter plot
     
@@ -37,16 +37,42 @@ def plot_time_series_scatter(data, x_label, y_label, fig_title=""):
     '''
 
 
-    fig, ax = plt.subplots(1)
+    fig, ax = plt.subplots(1, figsize=fig_size)
+    # fig, ax = plt.figure(1, figsize=fig_size)
     ax.scatter(data[x_label], data[y_label], marker='.')
 
     # fig.autofmt_xdate()
     ax.fmt_xdata = mdates.DateFormatter('%Y-%m-%d')
     ax.xaxis.set_major_locator(mdates.DayLocator(bymonthday=1))
+
+    # -------------------------------------------------
+    # STATISTICS BOX
+    # -------------------------------------------------
+    data_stats = data[y_label].describe()
+    stats_text = (
+        f"N = {data_stats['count']:.0f}\n"
+        f"MEAN = {data_stats['mean']:.2f}\n"
+        f"MAX = {data_stats['max']:.2f}\n"
+        f"STD = {data_stats['std']:.2f}\n"
+        f"NAN = {data[y_label].isnull().sum():.0f}"
+    )
+
+    ax.text(
+        txt_box_loc[0], txt_box_loc[1], stats_text,
+        transform=ax.transAxes,
+        ha="right", va="top",
+        fontsize=9,
+        bbox=dict(boxstyle="round", fc="white", ec="black")
+    )
+
     plt.ylabel(y_label)
     plt.xticks(rotation=45, ha='right')
     plt.title(fig_title) 
     plt.show()
+    plt.tight_layout()
+    plt.subplots_adjust(bottom=0.15)
+    if fname_save != "":
+        fig.savefig(fname_save, dpi=300, bbox_inches="tight")
 
 
 def plot_time_series_2vars(data1, data2):
@@ -69,7 +95,7 @@ def plot_time_series_2vars(data1, data2):
 
 # TODO: 
 # Jan 22, 2026: - Check  the correctness of rose plot visualization
-def plot_wind_rose(wind_direction, wind_speed, fig_title="", 
+def rose_plot(wind_direction, wind_speed, fig_title="", 
                    sector_width=30, bins=[4,6,8,10,12,14,16,18,20], calm_limit=4,
                    label_pos=260, rticks_label=[5, 10, 15, 20], rmax_val = 20, 
                    ytick_labels=['5%', '10%', '15%', '20%'], bbox_anchor=(1, 0.1)):
@@ -92,7 +118,7 @@ def plot_wind_rose(wind_direction, wind_speed, fig_title="",
     # direction of wind is blow to or from?. Set blowto=True at current moment
 
     # bins = [4,6,8,10,12,14,16,18,20]
-    fig = plt.figure(figsize=(4,4))
+    fig = plt.figure(figsize=(3,3))
 
     ax = WindroseAxes.from_ax()
 
@@ -107,15 +133,22 @@ def plot_wind_rose(wind_direction, wind_speed, fig_title="",
     ax.set_rticks(rticks_label)
     ax.set_yticklabels(ytick_labels)
     ax.set_rlabel_position(label_pos) 
+    
 
     ax.legend(
         title="Wind speed (m/s)",
         loc="center left",
         bbox_to_anchor=bbox_anchor,
-        frameon=True
+        frameon=True,
+        fontsize=12
     )
     plt.title(fig_title)
     plt.show()
+
+#TODO: Mar 10, 2026
+# Make dual rose plot
+def dual_rose_plot():
+    pass
 
 
 #TODO: make custom colormap later  
@@ -144,7 +177,7 @@ def truncate_colormap(cmap_name, minval=0.0, maxval=1.0, n=100):
 
 
 # Jan 26, 2026
-def scatter_plot_ERA5_against_meas(data, axis_lims, bin_width, fig_title, path_save):
+def scatter_plot_ERA5_against_meas(data, axis_lims, bin_width, fig_title, fname_save):
     '''
     Scatter plot of ERA5 against measurements for checking ERA5 validity as a 
     reliable source to force the hydrodynamic and wave models for FEED metocean study
@@ -254,7 +287,7 @@ def scatter_plot_ERA5_against_meas(data, axis_lims, bin_width, fig_title, path_s
         label=f"QQ fit: y={coef[0]:.2f}x+{coef[1]:.2f}"
     )
 
-    # Plot quamtiles
+    # Plot quantiles
     ax.scatter(qx, qy, s=20, marker='o', c='slategray')
     # -------------------------------------------------
     # AXES & GRID
@@ -304,6 +337,9 @@ def scatter_plot_ERA5_against_meas(data, axis_lims, bin_width, fig_title, path_s
     plt.title(fig_title)
     plt.tight_layout()
     plt.show()
+
+    if fname_save != '':
+        fig.savefig(fname_save) 
 
 
 #TODO: Refer to feasibility assessment stated in DNV-GL-2018, DHI report on Wando-Gumil (section 7.5)

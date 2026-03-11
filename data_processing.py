@@ -1,5 +1,7 @@
 '''
-Compute Wind direction and Wind speed from u,v-component of wind
+Compute various parameters from data
+- Wind speed from u,v component (ERA5 data)
+- Peal wave period (Tp)
 
 @Author: Le Thi Trang
 @Date: Jan 21, 2026
@@ -10,29 +12,49 @@ import math
 import numpy as np
 import pandas as pd
 
-
-def compute_avg_wind_speed(wind_data, min_to_avg, data_interval, verbose=0):
+# TODO: compute peak wave period, Tp
+def compute_wave_parameters():
     '''
-    Compute 10-minute average wind speed from 1-minute interval data measured at KHOA stations
+    Extract peak wave period from observations data
+    - 파주기(sec) measured by KMA is T02, zero-crossing wave period
+
 
     Parameters:
-        ws_data: pd.DataFrame, with 3 colums,    
+    Return:
+
+    Mar 09, 2026
+    '''
+    Tp=0
+    T02=0
+    T01 = 0
+    return Tp, T02,
+    
+
+
+def compute_data_avg_time(data, min_to_avg, data_interval, verbose=0):
+    '''
+    - Compute 10-minute average wind speed from 1-minute interval data measured
+    - Only used for calculating avg for interval less than or equal to 1 hour
+    - For retrieving data for interval large than 1 hour -> create new function
+
+    Parameters:
+        -ws_data: pd.DataFrame, with 3 colums,    
                 1st: time measured with 1-min resolution
                 2nd: wind speed in unit of m/s 
                 3rd: wind direction in unit of degree
-        min_to_avg: int, number of minutes that data be averaged out
-        data_interval: int, interval of data in minutes (e.g., 1, 5, 60 minutes)
-        verbose: int, for later used as indicating sampling scheme for quantizing data (DNV, 2.3.1.4)
+        -min_to_avg: int, number of minutes that data be averaged out
+        -data_interval: int, interval of data in minutes (e.g., 1, 5, 60 minutes)
+        -verbose: int, for later used as indicating sampling scheme for quantizing data (DNV, 2.3.1.4)
                 Currently, average data are calculated from only one period every hour
 
     Return
-        ws_avg: pd.DataFrame, with 2 colum,
+        -ws_avg: pd.DataFrame, with 2 colums,
             1st: time measured with 1-min resolution
             2nd: average wind speed over predefined minutes (m/s) 
          
 
     '''
-    columns_name = wind_data.columns
+    columns_name = data.columns
 
     points_per_hour = int(60 / data_interval) # for data with 1-min interval 
 
@@ -40,26 +62,26 @@ def compute_avg_wind_speed(wind_data, min_to_avg, data_interval, verbose=0):
     # TODO: Sampling scheme. later, need to change according to use input
 
     times_avg_per_hour = 1 # taking average for only one period every 1 hour
-    total_points = int(wind_data.shape[0]/points_per_hour) * times_avg_per_hour # compute number of returned data points 
+    total_points = int(data.shape[0]/points_per_hour) * times_avg_per_hour # compute number of returned data points 
 
     # always taking same part of data in 1 hour. 
     # E.g., always taking first 10 minutes in that hour for computing average wind speed
     taken_mins = np.arange(0, min_to_avg, 1)
     #########################################################################
 
-    ws_avg = np.zeros(total_points)
+    data_avg = np.zeros(total_points)
     idx_count = 0
     count = 0
-    while count < wind_data.shape[0]:
+    while count < data.shape[0]:
 
-        ws_avg[idx_count] = wind_data.iloc[count:(idx_count+1)*points_per_hour,1].loc[count+taken_mins].mean()
+        data_avg[idx_count] = data.iloc[count:(idx_count+1)*points_per_hour,1].loc[count+taken_mins].mean(skipna=True)
         idx_count = idx_count+1
         count = count + points_per_hour
 
-    ws_avg = pd.DataFrame(ws_avg, columns=[columns_name[1]]).round(2) # keep 2 number after decimal point
-    ws_avg[columns_name[0]] = wind_data.iloc[0:-1:points_per_hour,0].values # adding time data back to dataframe
+    data_avg = pd.DataFrame(data_avg, columns=[columns_name[1]]).round(2) # keep 2 number after decimal point
+    data_avg[columns_name[0]] = data.iloc[0:-1:points_per_hour,0].values # adding time data back to dataframe
 
-    return ws_avg.iloc[:,[1,0]]
+    return data_avg.iloc[:,[1,0]]
 
     
 
@@ -68,8 +90,8 @@ def compute_ws_wd_from_u_v(u, v):
     Compute wind speed and wind direction from u,v-component from ERA5 data
     
     Parameters:
-        u: array data 
-        v: array data 
+        -u: array data 
+        -v: array data 
     '''
     wind_speed = np.sqrt(np.power(u, 2) + np.power(v, 2))
     wind_direction = 180 + (180/math.pi) * np.atan2(u, v)
@@ -113,19 +135,6 @@ def filter_wind_meas_data(data, variable_names, quality_criteria):
     pass
 
     
-#TODO: Jan 23, 2026
-def compute_wind_parameters():
-    '''
-    Function for obtaining wind parameters.
-    Refer to DNV-GL-2018 Metocean Characterization 
-    Recommended practice for US offshore wind energy
-
-    Wind parameters including:
-        Wind speed statistics (min, mean, std, max) and distribution
-        Wind directionality
-        Wind profile, wind shear, turbulence
-    '''
-    pass
 
 
 def compute_wind_speed_spectrum():

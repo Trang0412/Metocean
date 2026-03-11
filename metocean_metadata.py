@@ -28,24 +28,35 @@ kma_wind_type_dict = dict(zip(kma_wind_vars, vars_type))
 khoa_wind_type_dict = dict(zip(khoa_wind_vars, vars_type))
 
 
+wave_direction_stations = ['거문도', '마라도', '추자도_해양기상부이', '서귀포']
 
 
-
-mapping_var_names = {
-    # KMA stations
-    'station_code':'지점',
-    'timestamp_kma':'일시',
-    'water_temp_name':'수온(°C)',
-    'Hmax':'최대파고(m)',
-    'Hm0':'유의파고(m)',
-    'Hmean':'평균파고(m)',
-    'Twave':'파주기(sec)',
-
+timestamp_names = {
     # KHOA stations
-    'ws':'풍속(m/s)',
-    'wd':'풍향(deg)',
-    'timestamp_khoa':'관측시간'
+    '관측시간':'timestamp_khoa',
+    '일시':'timestamp_kma',
+}
 
+wind_var_names = {
+    '풍속(m/s)':'ws',
+    '풍향(deg)':'wd',
+}
+
+wave_var_names = {
+    '최대파고(m)':'Hmax',
+    '유의파고(m)':'Hm0',
+    '평균파고(m)':'Hmean',
+    '파주기(sec)':'T02',
+    '파향(deg)':'waveD',
+}
+
+water_var_names = {
+    '조위(cm)':'WL'
+}
+
+current_var_names = {
+    '유속(cm/s)': 'CS',
+    '유향(deg)': 'CD',
 }
 
 #%% Criteria for filtering wrong or bad data from measurements
@@ -58,6 +69,7 @@ mapping_QAed = {
     'wl':[-5, 5], # water level [mMSL]
     'Hm0':[0, 12], # significant wave height [m]
     'Tp':[0, 30], # peak wave interval [s]
+    'T02':[0, 30], # peak wave interval [s]
     'cs':[0, 2], # current speed [m/s]
     'ws':[0, 60], # wind speed [m/s]
     'direction': [0, 360], # directional data, degree

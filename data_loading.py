@@ -12,10 +12,51 @@ import numpy as np
 import glob
 from pathlib import Path
 pd.set_option('future.no_silent_downcasting', True)
-from metadata import *
+from metocean_metadata import *
 
 
-def load_era5_data(dir_data, var_name, year=2024):
+
+
+def load_obs_all_data(dir_data, provider, station, year=2024):
+    '''
+    Load yearly measurement data for a certain year in specified station
+    Assuming data were measured for full 12-month in year
+
+
+    Parameter
+        -dir_data: str, directory storing measurement data
+        -station: str, directory to data according to each provider. E.g., KHOA_제주
+        -list_vars: list of string, measured variables to load
+        -type_dict: dictionary, mapping measured data to correct type depends on each variable
+        -year: integer, data in the year to load
+
+    Return
+        - data_year: pd.DataFrame, dataframe of loaded data in requested year with corrected type
+
+    '''
+
+    dir_station = dir_data +  provider + '\\' + station + '\\'
+    path_station = Path(dir_station)
+
+    if provider == 'KHOA':
+        matching_files = list(path_station.glob(f'{year}*'))
+        try:
+            data = pd.read_csv(matching_files[0], sep='\t', skiprows=3,)
+        except:
+            data = pd.read_csv(matching_files[0], sep='\t', skiprows=3,header=0, encoding='cp949')
+        data = data.replace('-', np.nan) 
+
+    elif provider == 'KMA':
+        matching_files = list(path_station.glob(f'*_{year}_*'))
+        data = pd.read_csv(matching_files[0], sep=',', header=0, encoding='cp949')
+        data = data.replace('-', np.nan) 
+
+    return data
+
+
+
+
+def load_era5_wind_data(dir_data, var_name, year=2024):
     '''
     Load newly downloaded era5 data.
     Currently working with newly downloaded data
@@ -26,7 +67,7 @@ def load_era5_data(dir_data, var_name, year=2024):
         -year: integer, year of data measurement     
 
     Return
-        list of array.dataset seprated for each variales 
+        list of xarray.dataset seprated for each variables 
 
     Create date: Jan 26, 2026
 
@@ -79,10 +120,34 @@ def load_era5_data(dir_data, var_name, year=2024):
         return [mslp]
 
 
+# TODO: loading rescaled ERA5 data
+def load_era5_rescaled_wind_data(dir_data, station_code, year=2024):
+
+    #load u,v component separately as saved
+    wind_data = xr.DataArray()
+    for month in range(1,13):
+        if month < 10:
+            wind_monthly = xr.open_dataset(dir_data + str(year) + f"\\ERA5_windfield_{station_code}_{year}0{month}.nc", engine="netcdf4")
+        else:
+            wind_monthly = xr.open_dataset(dir_data + str(year) + f"\\ERA5_windfield_{station_code}_{year}{month}.nc", engine="netcdf4")
+        
+        list_dims = list(wind_monthly.dims)
+        time_dim = [dim for dim in list_dims if 'time' in dim.lower()]
+
+        if len(time_dim) !=1:
+            raise Exception(f'There is none or more than 1 dimension of time at {year} ERA5 data')
+        if month==1:
+            wind_data = wind_monthly
+    
+        else:
+            wind_data = xr.concat([wind_data, wind_monthly], dim=time_dim[0], join='outer')
+
+
+    return wind_data
 
 
 
-def load_meas_data(dir_data, provider, station, year=2024):
+def load_obs_wind_data(dir_data, provider, station, year=2024):
     '''
     Load yearly measurement data for a certain year in specified station
     Assuming data were measured for full 12-month in year
@@ -99,16 +164,6 @@ def load_meas_data(dir_data, provider, station, year=2024):
         - data_year: pd.DataFrame, dataframe of loaded data in requested year with corrected type
 
     '''
-
-    # data_year = pd.DataFrame(columns=list_vars)
-    # data_year = data_year.astype(type_dict)
-
-    # global kma_wind_vars
-    # global khoa_wind_vars
-    
-    # global kma_wind_type_dict
-    # global khoa_wind_type_dict
-    
 
     dir_station = dir_data +  provider + '\\' + station + '\\'
 
