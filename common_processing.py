@@ -12,24 +12,6 @@ import math
 import numpy as np
 import pandas as pd
 
-# TODO: compute peak wave period, Tp
-def compute_wave_parameters():
-    '''
-    Extract peak wave period from observations data
-    - 파주기(sec) measured by KMA is T02, zero-crossing wave period
-
-
-    Parameters:
-    Return:
-
-    Mar 09, 2026
-    '''
-    Tp=0
-    T02=0
-    T01 = 0
-    return Tp, T02,
-    
-
 
 def compute_data_avg_time(data, min_to_avg, data_interval, verbose=0):
     '''
@@ -83,21 +65,6 @@ def compute_data_avg_time(data, min_to_avg, data_interval, verbose=0):
 
     return data_avg.iloc[:,[1,0]]
 
-    
-
-def compute_ws_wd_from_u_v(u, v):
-    '''
-    Compute wind speed and wind direction from u,v-component from ERA5 data
-    
-    Parameters:
-        -u: array data 
-        -v: array data 
-    '''
-    wind_speed = np.sqrt(np.power(u, 2) + np.power(v, 2))
-    wind_direction = 180 + (180/math.pi) * np.atan2(u, v)
-
-    return wind_speed, wind_direction
-
 
 def deal_with_missing_value(wind_data, num_point=-99):
     '''
@@ -135,38 +102,36 @@ def filter_wind_meas_data(data, variable_names, quality_criteria):
     pass
 
     
-
-
-def compute_wind_speed_spectrum():
+def find_duplicate(data, time_stamp):
     '''
-    For spectral comparion of ERA5 and measured wind speed 
-    Refer to Figure 2.11 from DHI report for Wando-Gumil, page 22
+    Remove duplicated records in observation data based on time information.
+    Currently doing manually: remove duplicate records
+    Representative data: Seongsanpo 2006 year
+
+    Parameters:
+        - data: pd.Dataframe with first colume is Time. 
+
+    Return:
+        - idxs_to_remove: list, list of indexes of duplidates which should be removed
+
     '''
-    pass
+    # check if data were all duplicated
+    # Representative 2022년 거문도 조위관측소
+    # 8760 = 24 * 365
+    fist_records = data.index[data[time_stamp] == data[time_stamp].iloc[0]]
+    if fist_records.size>1 and np.diff(fist_records)>8760:
+        removed_idxs = np.arange(fist_records[1],len(data))
+        data.drop(removed_idxs, inplace=True)
+        # frop four metadata line
+        data.drop(np.arange(len(data)-4,len(data)), inplace=True)
 
-#TODO: convert surface wind from measurement data to 10-m height as in ERA5?
-# Jan 26, 2026
-# Refer to DHI report for Wando-Gumil:
-# measurements (60mMSL) were converted to 10mMSL using a power wind profile and a shear factor of 0.11.
-# Check if data were measured at what heights. For exampple, 10m, 50m mMSL
-def convert_wind_speed_height_power(U_ref, z, z_ref, a_w):
-    '''
-    Convert wind averaging at certain vertical level(height, e.g., 100 m) to certain vertical level (e.g., 10 m)
-    Using power law to convert wind speed at measured height (e.g., 60mMSL) to reference height (e.g., 10mMSL)
-    Refer to formula 5-2, page 97, DNV-GL Metocean Characterization Recommended Practices for U.S. Offshore Wind Energy
+    row_duplicated = data.index[data.duplicated(subset=time_stamp) == True].tolist()
+    
+    idxs_to_remove = np.zeros_like(row_duplicated)
+    for i, ri in enumerate(row_duplicated):
+        if pd.isna(data.iloc[ri,1:-1]).all():
+            idxs_to_remove[i] = ri
+        else:
+            idxs_to_remove[i] = ri-1
 
-    Parameter
-        -U: numpy.array, of wind speed data at height measured
-        -z: integer, height at that level wind profile was measured and/or computed
-        -z_ref: integer, height at that level wind profile should be converted (i.e., reference height, usually 10 m)
-        -a_w: float, shear exponent factor used for conversion
-
-    Return
-        -cwind_data: numpy.array, converted wind data to expected vertical level
-    '''
-
-    # z = 60
-    # z_ref = 10
-
-
-    return np.multiply(U_ref, np.power(z/z_ref, a_w))
+    return idxs_to_remove

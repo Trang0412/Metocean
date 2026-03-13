@@ -51,7 +51,7 @@ wave_var_names = {
 }
 
 water_var_names = {
-    '조위(cm)':'WL'
+    '조위(cm)':'WL' # tide level
 }
 
 current_var_names = {

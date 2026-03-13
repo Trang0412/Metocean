@@ -36,10 +36,9 @@ def plot_time_series_1var(data, x_label, y_label, fig_size=[6.4, 4.8], fig_title
         Xticks are set to first day each month, by funtion DayLocator
     '''
 
-
     fig, ax = plt.subplots(1, figsize=fig_size)
-    # fig, ax = plt.figure(1, figsize=fig_size)
-    ax.scatter(data[x_label], data[y_label], marker='.')
+    # ax.scatter(data[x_label], data[y_label], marker='.')
+    ax.scatter(data[x_label], data[y_label], s=4)
 
     # fig.autofmt_xdate()
     ax.fmt_xdata = mdates.DateFormatter('%Y-%m-%d')
