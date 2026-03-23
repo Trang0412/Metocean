@@ -29,7 +29,7 @@ khoa_wind_type_dict = dict(zip(khoa_wind_vars, vars_type))
 
 
 wave_direction_stations = ['거문도', '마라도', '추자도_해양기상부이', '서귀포']
-
+longest_checking_duration_wind = [2015, 2025]
 
 timestamp_names = {
     # KHOA stations
@@ -64,7 +64,7 @@ current_var_names = {
 # Need to change according to study site
 # Data outside of the following limits are being removed
 
-mapping_QAed = {
+fixed_qc_criteria = {
     # KMA stations
     'wl':[-5, 5], # water level [mMSL]
     'Hm0':[0, 12], # significant wave height [m]
@@ -79,3 +79,8 @@ mapping_QAed = {
 
 }
 
+# Parameter for wind spectral analysis
+fs_era5 = 1 / 3600      # hourly data (Hz)
+fs_ws_1h   = 1 / 3600
+fs_ws_2h   = 1 / (2 * 3600)
+fs_ws_3h   = 1 / (3 * 3600)

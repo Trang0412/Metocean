@@ -27,7 +27,7 @@ import os
 
 
 # request for 50 years of data, from 1976 to 2025
-years_in_request = np.arange(1974,2026,1)
+years_in_request = np.arange(2024,2026,1)
 months = np.arange(1,13,1)
 
 # CDS client and dataset
@@ -36,7 +36,9 @@ request = {
     "variable": [
         "100m_u_component_of_wind",
         "100m_v_component_of_wind",
-        # "mean_sea_level_pressure",
+        "mean_sea_level_pressure",
+        "10m_u_component_of_wind",
+        "10m_v_component_of_wind",
     ],
     "day": [
         "01", "02", "03",
@@ -63,14 +65,14 @@ request = {
     ],
     "data_format": "netcdf",
     "download_format": "unarchived",
-    "area": [32, 120, 40, 138]
+    "area": [0, 100, 60, 180]
 }
 
 dataset = "reanalysis-era5-single-levels"
 
 #%%
 
-path_save = 'D:\\InProbation\\Metocean\\Data\\ERA5\\reduced_korea\\wind_100m_u_v\\'
+path_save = 'D:\\InProbation\\Metocean\\Data\\ERA5\\pacific\\'
 client = cdsapi.Client() 
 for year in years_in_request:
     if os.path.isdir(path_save + str(year)) == False:
@@ -84,9 +86,9 @@ for year in years_in_request:
 
         # have to change according to variables are being dowloaded
         if month<10:
-            target_file  = f'ERA5_{year}0{month}_reduced_korea.nc'
+            target_file  = f'ERA5_{year}0{month}_reduced_pacific.nc'
         else:
-            target_file  = f'ERA5_{year}{month}_reduced_korea.nc'
+            target_file  = f'ERA5_{year}{month}_reduced_pacific.nc'
 
         year_data = client.retrieve(dataset, request)
         year_data.download(target_file)

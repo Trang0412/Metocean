@@ -9,6 +9,7 @@ import seaborn as sns
 import matplotlib.colors as mcolors
 import matplotlib as mpl
 from matplotlib import colormaps as cmaps
+from scipy.signal import welch
 
 import statsmodels.api as sm
 from scipy import stats
@@ -18,11 +19,12 @@ import numpy as np
 import pandas as pd
 plt.rcParams['font.family'] = 'Malgun Gothic'
 plt.rc
+plt.rcParams['axes.unicode_minus'] = False
 
 
 
-
-def plot_time_series_1var(data, x_label, y_label, fig_size=[6.4, 4.8], fig_title="", fname_save="", txt_box_loc = [1.1, 1.1]):
+def plot_time_series_1var(data, x_label, y_label, fig_size=[6.4, 4.8], fig_title="", fname_save="", 
+                          face_color ='#808080', txt_box_loc = [1.1, 1.1]):
     '''
     Time series scatter plot
     
@@ -38,7 +40,7 @@ def plot_time_series_1var(data, x_label, y_label, fig_size=[6.4, 4.8], fig_title
 
     fig, ax = plt.subplots(1, figsize=fig_size)
     # ax.scatter(data[x_label], data[y_label], marker='.')
-    ax.scatter(data[x_label], data[y_label], s=4)
+    ax.scatter(data[x_label], data[y_label], s=4, c=face_color)
 
     # fig.autofmt_xdate()
     ax.fmt_xdata = mdates.DateFormatter('%Y-%m-%d')
@@ -74,21 +76,83 @@ def plot_time_series_1var(data, x_label, y_label, fig_size=[6.4, 4.8], fig_title
         fig.savefig(fname_save, dpi=300, bbox_inches="tight")
 
 
-def plot_time_series_2vars(data1, data2):
+def plot_time_series_2vars(data, data1_label, data2_label, fig_size=[6.4, 4.8], fig_title="", fname_save="", 
+                           fc1 ='#808080', fc2 ='#069AF3', txt_loc1 = [0.05, 0.95], txt_loc2= [0.05, 0.87]):
     '''
     Scatter plot of 2 time series data for visually comparisons.
     Refer to Figure 2.13 DHI report
+    Assuming 2 data have common columns of time stamp and one other common data to compare, e.g., wind speed
     
     Parameters:
-        data: list of pd.DataFrame, one for more data to plot
-        x_variable: str, name of variables to plot in x_axis
-        y_variable: str, name of variables to plot in y_axis
+        data: pd.DataFrame, at least 3 columns data, 
+            1st for x-axis, timestemp
+            2nd: 1st data for y-axis
+            3rd: 2nd data for y-axis
+        data1_label: str, name of 1st variables to plot in x_axis
+        data2_label: str, name of 2dn variables to plot in y_axis
 
     Return:
         None, just showing plot
         Xticks are set to first day each month, by funtion DayLocator
     '''
-    pass
+
+    df_columns = data.columns.tolist()
+
+    # -------------------------------------------------
+    # STATISTICS BOX
+    # -------------------------------------------------
+    data1_stats = data.iloc[:,1].describe()
+    stats1_text = (
+        f"{data1_label}: "
+        f"N = {data1_stats['count']:.0f}, "
+        f"MEAN = {data1_stats['mean']:.2f}, "
+        f"MAX = {data1_stats['max']:.2f}, "
+        f"STD = {data1_stats['std']:.2f}, "
+        f"NAN = {data.iloc[:,1].isnull().sum():.0f}"
+    )
+
+    data2_stats = data.iloc[:,2].describe()
+    stats2_text = (
+        f"{data2_label}: "
+        f"N = {data2_stats['count']:.0f}, "
+        f"MEAN = {data2_stats['mean']:.2f}, "
+        f"MAX = {data2_stats['max']:.2f}, "
+        f"STD = {data2_stats['std']:.2f}, "
+        f"NAN = {data.iloc[:,2].isnull().sum():.0f}"
+    )
+
+    # figure plot
+    fig, ax = plt.subplots(1, figsize=fig_size)
+    ax.scatter(data.iloc[:,0], data.iloc[:,1], s=4, c=fc1)
+    ax.scatter(data.iloc[:,0], data.iloc[:,2], s=4, c=fc2)
+
+    ax.fmt_xdata = mdates.DateFormatter('%Y-%m-%d')
+    ax.xaxis.set_major_locator(mdates.DayLocator(bymonthday=1))
+
+    ax.text(
+        txt_loc1[0], txt_loc1[1], stats1_text,
+        transform=ax.transAxes,
+        ha="left", va="top",
+        fontsize=9, c = fc1
+        
+    )
+    ax.text(
+        txt_loc2[0], txt_loc2[1], stats2_text,
+        transform=ax.transAxes,
+        ha="left", va="top",
+        fontsize=9, c=fc2
+        # bbox=dict(boxstyle=None, fc="white", ec=None)
+    )
+
+    plt.ylabel(df_columns[1].split('_')[0])
+    plt.xticks(rotation=45, ha='right')
+    plt.title(fig_title) 
+    plt.show()
+    plt.tight_layout()
+    plt.subplots_adjust(bottom=0.15)
+
+    if fname_save != "":
+        fig.savefig(fname_save, dpi=600, bbox_inches="tight")
 
 
 
@@ -176,7 +240,7 @@ def truncate_colormap(cmap_name, minval=0.0, maxval=1.0, n=100):
 
 
 # Jan 26, 2026
-def scatter_plot_ERA5_against_meas(data, axis_lims, bin_width, fig_title, fname_save):
+def scatter_plot_ERA5_against_meas(data, fig_size, axis_lims, bin_width, fig_title, fname_save):
     '''
     Scatter plot of ERA5 against measurements for checking ERA5 validity as a 
     reliable source to force the hydrodynamic and wave models for FEED metocean study
@@ -196,7 +260,8 @@ def scatter_plot_ERA5_against_meas(data, axis_lims, bin_width, fig_title, fname_
         Later can return stats information
     '''
 
-    
+    # Mar 18, 2026: explicitly remove missing value
+    data = data.dropna()
 
     qqfit_color = 'lightsteelblue'
     x = data.iloc[:,1].values
@@ -260,7 +325,7 @@ def scatter_plot_ERA5_against_meas(data, axis_lims, bin_width, fig_title, fname_
     # -------------------------------------------------
     # PLOT
     # -------------------------------------------------
-    fig, ax = plt.subplots(figsize=(8, 7))
+    fig, ax = plt.subplots(figsize=fig_size)
 
     sc = ax.scatter(
         x, y,
@@ -320,11 +385,11 @@ def scatter_plot_ERA5_against_meas(data, axis_lims, bin_width, fig_title, fname_
     )
 
     ax.text(
-        1.6, 1.1, stats_text,
+        1.4, 1, stats_text,
         transform=ax.transAxes,
         ha="right", va="top",
         fontsize=9,
-        bbox=dict(boxstyle="round", fc="white", ec="black")
+        bbox=dict(boxstyle="round", fc="white", ec="gray")
     )
 
     # -------------------------------------------------
@@ -346,3 +411,116 @@ def scatter_plot_ERA5_against_meas(data, axis_lims, bin_width, fig_title, fname_
 # 
 def plot_wave_height_against_peak_period():
     pass
+
+def compute_spectrum(u, dt, nperseg=256):
+    '''
+    Compute spectrum of time series data
+    Parameters:
+        -u: np.array, time series data
+        -dt: float, sampling interval of data, in unit of seconds
+        -nperseg: length of each segment 
+
+    Returns:
+        -f: array of sample frequencies
+        - S: power spectral density
+    '''
+    fs = 1 / dt
+    u = u - np.mean(u)
+    f, S = welch(u, fs=fs, nperseg=nperseg)
+    return f[1:], S[1:]  # remove zero freq
+    
+
+def spectra_comparison(df, dt_modeled, fig_title):
+    '''
+    Compute empirical spectrl of wind speed using FFT
+    Parameters:
+        - df: pd.DataFrame, wind speed/wave data with 
+            1st columnm: time_stamp => soon to  be set as index
+            2nd column: observation,
+            3rd column: era5, 
+        - dt_modeled: float, modeled data/era5 data temporal interval. 
+            while measurment data are converted to 1hr average
+    Return
+
+    '''
+
+    df = df.dropna()
+    df = df.set_index(df.columns[0])
+    dt_1hr = 3600
+    
+    modeled_label = [col for col in df.columns if '_obs' not in col]
+    f_modeled, S_modeled = compute_spectrum(df[modeled_label[0]].values, dt_modeled)
+
+    # ======================================
+    # Obsrvations data, for 1,2,3-hr average
+    # ======================================
+    # 1-hour
+    obs_label = [col for col in df.columns if '_obs' in col]
+    obs_1h = df[obs_label[0]].resample('1h').mean()
+    f_1h, S_1h = compute_spectrum(obs_1h.dropna().values, dt_1hr)
+
+    # 2-hour
+    obs_2h = df[obs_label[0]].resample('2h').mean()
+    f_2h, S_2h = compute_spectrum(obs_2h.dropna().values, dt_1hr*2)
+
+    # 3-hour
+    obs_3h = df[obs_label[0]].resample('3h').mean()
+    f_3h, S_3h = compute_spectrum(obs_3h.dropna().values, dt_1hr*3)
+
+    # ==================================================
+    # -5/3 SLOPE, Kolmogorov power law (Wind Turbulence)
+    # ==================================================
+    f_ref = 1e-4 # defined by some important wind frequency?
+    S_ref = np.interp(f_ref, f_1h, S_1h)
+
+    f_slope = np.logspace(-7, -3, 100) # defined by some important wind frequency?
+    S_slope = S_ref * (f_slope / f_ref) ** (-5/3)
+
+    # =========================
+    # PLOT
+    # =========================
+
+    plt.figure(figsize=(8,6))
+
+    # Spectra
+
+    plt.loglog(f_modeled, S_modeled, color='black', label='ERA5')
+    plt.loglog(f_1h, S_1h, label='Measurements (1 h)')
+    plt.loglog(f_2h, S_2h, label='Measurements (2 h)')
+    plt.loglog(f_3h, S_3h, label='Measurements (3 h)')
+
+    # -5/3 slope
+    plt.loglog(f_slope, S_slope, 'k--')
+    plt.text(2e-6, S_ref*2, r'$k^{-5/3}$')
+
+    # =========================
+    # REFERENCE TIME SCALES
+    # =========================
+    def add_time_line(period_sec, label):
+        f = 1 / period_sec
+        plt.axvline(f, color='k', linestyle='--', linewidth=0.8)
+        plt.text(f, 1e0, label, rotation=90, va='bottom', ha='right')
+
+    add_time_line(365*24*dt_1hr, '1 year')
+    add_time_line(24*dt_1hr, '1 day')
+    add_time_line(12*dt_1hr, '12 h')
+    add_time_line(3*dt_1hr, '3 h')
+    add_time_line(1*dt_1hr, '1 h')
+    add_time_line(20*60, '20 min')
+
+    # =========================
+    # STYLE
+    # =========================
+    plt.xlabel('f [Hz]')
+    plt.ylabel(r'S(f) [m$^2$/s]')
+    plt.title(fig_title)
+
+    plt.grid(True, which='both', linestyle='-', alpha=0.3)
+    plt.legend()
+
+    plt.xlim(1e-8, 1e-2)
+    plt.ylim(1e-1, 1e7)
+
+    plt.tight_layout()
+    plt.show()
+

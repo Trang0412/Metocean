@@ -73,10 +73,6 @@ def load_era5_wind_data(dir_data, var_name, year=2024):
 
     '''
     
-    # Working with self-downloaded ERA5 data. Jan 26, 2026
-
-    
-    
     if 'wind_100m' in var_name:
 
         #load u,v component separately as saved
@@ -120,16 +116,29 @@ def load_era5_wind_data(dir_data, var_name, year=2024):
         return [mslp]
 
 
-# TODO: loading rescaled ERA5 data
-def load_era5_rescaled_wind_data(dir_data, station_code, year=2024):
+def load_era5_regrid_wind_data(dir_data, year=2024):
+    '''
+    Load regrided ERA5 wind field data.
+    Currently working with newly downloaded data
 
+    Parameter
+        -dir_data: str, directory to saved ERA5 data
+        -var_name: str, name of variable to load, e.g., wind_10m_u_v
+        -year: integer, year of data measurement     
+
+    Return
+        list of xarray.dataset seprated for each variables 
+
+    Create date: Jan 26, 2026
+
+    '''
     #load u,v component separately as saved
     wind_data = xr.DataArray()
     for month in range(1,13):
         if month < 10:
-            wind_monthly = xr.open_dataset(dir_data + str(year) + f"\\ERA5_windfield_{station_code}_{year}0{month}.nc", engine="netcdf4")
+            wind_monthly = xr.open_dataset(dir_data + '\\' + str(year) + f"\\ERA5_windfield_{year}0{month}.nc", engine="netcdf4")
         else:
-            wind_monthly = xr.open_dataset(dir_data + str(year) + f"\\ERA5_windfield_{station_code}_{year}{month}.nc", engine="netcdf4")
+            wind_monthly = xr.open_dataset(dir_data + '\\' + str(year) + f"\\ERA5_windfield_{year}{month}.nc", engine="netcdf4")
         
         list_dims = list(wind_monthly.dims)
         time_dim = [dim for dim in list_dims if 'time' in dim.lower()]
@@ -138,10 +147,8 @@ def load_era5_rescaled_wind_data(dir_data, station_code, year=2024):
             raise Exception(f'There is none or more than 1 dimension of time at {year} ERA5 data')
         if month==1:
             wind_data = wind_monthly
-    
         else:
             wind_data = xr.concat([wind_data, wind_monthly], dim=time_dim[0], join='outer')
-
 
     return wind_data
 
