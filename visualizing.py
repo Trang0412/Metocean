@@ -1,3 +1,23 @@
+'''
+Function definition for visualization
+
+List of fuction supported (to-be-updated, last updated Mar 23, 2026)
+    -plot_locs_on_geo_map()
+    -plot_time_series_1var()
+    -plot_time_series_2vars()
+    -truncate_colormap()
+    -scatter_plot_ERA5_against_meas()
+    -spectra_comparison()
+
+@Author: Le Thi Trang
+@Date: Jan 23, 2026
+'''
+
+#%%
+import matplotlib.pyplot as plt
+import cartopy.crs as ccrs
+import cartopy.feature as cfeature
+from cartopy.io.shapereader import Reader
 
 import windrose
 import matplotlib.pyplot as plt
@@ -9,18 +29,213 @@ import seaborn as sns
 import matplotlib.colors as mcolors
 import matplotlib as mpl
 from matplotlib import colormaps as cmaps
-from scipy.signal import welch
+import matplotlib.patches as patches
 
+import pandas as pd
 import statsmodels.api as sm
 from scipy import stats
 from scipy.stats import binned_statistic_2d
 import numpy as np
+import xarray as xr
 
-import pandas as pd
+from common_processing import *
+
 plt.rcParams['font.family'] = 'Malgun Gothic'
 plt.rc
 plt.rcParams['axes.unicode_minus'] = False
 
+#%%
+
+# Mar 24, 2026
+
+def plot_nearest_point_era5_regrid_era5(bounding_area, vars_metadata, era5_coor, regrid_era5_coor, compare_statn):
+    '''
+    Show nearest points for wind comparison between ERA5 and regrided ERA5 to observation 
+    Examine whether locs used for comparing wind speed in ERA5 and regrided ERA5 are too far causing 
+        performance difference of underestimating observation in case of regrided ERA5
+
+    
+    Parameters:
+        -bounding_lat_lon: dictionary, with keys of lat/lon for bounding area to llot
+            e.g., {'lat': [33, 34], 'lon':[126, 127]}
+
+        -vars_metadata: pd.DataFrame, loading from excel file for prerequite analysis
+        -era5_coor: dictionary, full coordinate from downloaded ERA5 data, global variable from metocean_metadata
+        -regrid_era5_coor: dictionary, full coordinate from regrided ERA5 data, global variable from metocean_metadata
+        -comapre_statn: string, name of station to be checked, in form of {station_name}_{provider}
+
+    Returns:
+        None, only show figure
+    '''
+
+    
+    stations = vars_metadata['Name'].dropna()
+    providers = vars_metadata['Provider'].dropna()
+
+
+    era5_geo_locs = xr.Dataset(coords=era5_coor)
+    regrid_era5_geo_locs = xr.Dataset(coords=regrid_era5_coor)
+
+    # values in order of longitude/latitude
+    name_as_key = [f'{stations[i]}_{providers[i]}' for i in range(len(stations))]
+    disp_locs = dict(zip(name_as_key, zip(vars_metadata['Longitude'][0:len(stations)], vars_metadata['Latitude'][0:len(stations)])))
+    disp_locs.update({'PC1': (126.84852780, 33.54219444), 'PC2': (126.85891670, 33.55400000)})
+
+    era5_nearest_point = era5_geo_locs.sel(lat=disp_locs[compare_statn][1], lon=disp_locs[compare_statn][0], method='nearest').coords
+    era5_nearest_point = [round(float(era5_nearest_point['lon'].values),2),
+                        round(float(era5_nearest_point['lat'].values),2)]
+
+    reg_era5_nearest_point = regrid_era5_geo_locs.sel(lat=disp_locs[compare_statn][1], lon=disp_locs[compare_statn][0], method='nearest').coords
+    reg_era5_nearest_point = [round(float(reg_era5_nearest_point['lon'].values),2),
+                            round(float(reg_era5_nearest_point['lat'].values),2)]
+
+    plot_points = dict({compare_statn: disp_locs.get(compare_statn), 
+                        'Loc in Original ERA5': era5_nearest_point, 
+                        'Loc in Regrided ERA5': reg_era5_nearest_point})
+    plot_locs_on_geo_map(bounding_area, plot_points, turnon_loc_name=True)
+
+
+def plot_locs_on_geo_map(bounding_area, plot_points, tick_res=0.25, minor_res=0.05, turnon_loc_name=False):
+    '''
+    Plot location of on contoured geographical map using geopandas/cartopy packages
+
+    Parameters:
+        -bounding_lat_lon: dictionary, with keys of lat/lon for bounding area to llot
+            e.g., {'lat': [33, 34], 'lon':[126, 127]}
+
+        -disp_locs: dictionary, with keys as name of station_provider, values of tuple of (lon, lat) coordinate
+
+    Returns:
+        -None, only show figure
+    '''
+
+    fig = plt.figure(figsize=(5, 5))
+    ax = plt.axes(projection=ccrs.PlateCarree())
+
+    # Set map extent 
+    ax.set_extent([bounding_area['lon'][0], bounding_area['lon'][1],
+                   bounding_area['lat'][0], bounding_area['lat'][1]], 
+                   crs=ccrs.PlateCarree())
+    coast = cfeature.GSHHSFeature(scale='full')
+    ax.add_feature(coast)
+
+    # Gridlines with labels
+    x_ticks = np.arange(bounding_area['lon'][0]-tick_res, bounding_area['lon'][1]+tick_res, tick_res)
+    y_ticks = np.arange(bounding_area['lat'][0]-tick_res, bounding_area['lat'][1]+tick_res, tick_res)   
+
+    gl1 = ax.gridlines(draw_labels=True, xlocs = x_ticks, ylocs=y_ticks, 
+                      xlim=[bounding_area['lon'][0]-tick_res, bounding_area['lon'][1]+tick_res], 
+                      ylim=[bounding_area['lat'][0]-tick_res, bounding_area['lat'][1]+tick_res],
+                      linewidth=0.2, linestyle='--', color='grey')
+    
+    gl1.top_labels = False
+    gl1.right_labels = False
+
+    # Axis labels formatting
+    # gl1.xlabel_style = {'size': 9, 'fontfamily':'sans-serif', 'weight':'bold'}
+    # gl1.ylabel_style = {'size': 9, 'fontfamily':'sans-serif', 'weight':'bold'}
+    gl1.xlabel_style = {'size': 9, 'fontfamily':'sans-serif'}
+    gl1.ylabel_style = {'size': 9, 'fontfamily':'sans-serif'}
+
+    x_ticks_minor = np.arange(bounding_area['lon'][0], bounding_area['lon'][1], minor_res)
+    y_ticks_minor = np.arange(bounding_area['lat'][0], bounding_area['lat'][1], minor_res)
+
+    gl2 = ax.gridlines(draw_labels=False, xlocs = x_ticks_minor, ylocs=y_ticks_minor, 
+                      linewidth=0.1, linestyle='--', color='grey')
+    
+    for loc_name in plot_points:
+
+    
+        if 'Original ERA5' in loc_name:
+            dot_marker = 'o'
+            xytext_loc = (-10,-15)
+            circle = patches.Circle((plot_points[loc_name][0], plot_points[loc_name][1]), radius=0.07, color='green', fill=False)
+            circle.set(label=loc_name)
+            ax.add_patch(circle)
+            continue
+
+        if 'Regrided ERA5' in loc_name:
+            dot_marker = 'o'
+            xytext_loc = (-10,-30)
+            circle = patches.Circle((plot_points[loc_name][0], plot_points[loc_name][1]), radius=0.05, color='blue', fill=False)
+            circle.set(label=loc_name)
+            ax.add_patch(circle)
+            continue
+    
+        if 'PC' in loc_name:
+            color_code = 'green'
+            dot_marker = 's'
+            xytext_loc = (-15,-15)
+      
+        if 'KHOA' in loc_name:
+            color_code = 'yellow'
+            dot_marker = 'o'
+            xytext_loc = (-35,-10)
+
+        if 'KMA' in loc_name:
+            color_code = 'red'
+            dot_marker = 'P'
+            xytext_loc = (5,5)
+
+        # print(loc_name)
+        if turnon_loc_name:
+            plt.annotate(loc_name.split('_')[0], (plot_points[loc_name][0], plot_points[loc_name][1]),
+                                xytext=xytext_loc, textcoords="offset points", color=color_code, fontsize=9)
+        plt.plot(plot_points[loc_name][0], plot_points[loc_name][1], 
+                 marker=dot_marker, color=color_code, markeredgecolor='black', markersize=10)
+        del dot_marker
+    ax.legend()
+
+    plt.show()
+
+
+def plot_grid_locations(ref_lats, ref_lons, inter_locs):
+    '''
+    Plot meshgrid of regions from which ERA5 data were retrieved.
+    Manually choose the reference location by inspection
+    
+    Parameters:
+        ref_lats: List, location's latitude extracted from ERA5 data
+        ref_lats: List, location's longitude from ERA5 data
+        inter_locs: DataFrame, chosen locations read from excel file. 
+
+    Return: 
+        None, only show the image for inspection with interest location is in red while reference locations are in gray.
+        Show the legend for also?
+
+    '''
+
+    lons, lats = np.meshgrid(ref_lons, ref_lats)
+    plt.plot(lons, lats , marker='o', color='gray', linestyle='none')
+    plt.xticks(ref_lons)
+    plt.yticks(ref_lats)
+    n_inter_locs = len(inter_locs)
+
+    for i in range(n_inter_locs):
+        if 'PC' in inter_locs.iloc[i].Name:
+            color_code = 'green'
+            dot_marker = 's'
+            xytext_loc = (-15,-15)
+      
+        if 'KHOA' in inter_locs.iloc[i].Provider:
+            color_code = 'yellow'
+            dot_marker = 'o'
+            xytext_loc = (-35,-10)
+
+        if 'KMA' in inter_locs.iloc[i].Provider:
+            color_code = 'red'
+            dot_marker = 'P'
+            xytext_loc = (5,5)
+        
+
+        plt.plot(inter_locs.iloc[i].Longitude, inter_locs.iloc[i].Latitude, 
+                 marker=dot_marker, color=color_code, markeredgecolor='black', markersize=10)
+        plt.annotate(inter_locs.iloc[i].Name, (inter_locs.iloc[i].Longitude, inter_locs.iloc[i].Latitude),
+                             xytext=xytext_loc, textcoords="offset points", fontsize=10)
+
+    plt.legend()
+
+    plt.show()
 
 
 def plot_time_series_1var(data, x_label, y_label, fig_size=[6.4, 4.8], fig_title="", fname_save="", 
@@ -153,7 +368,6 @@ def plot_time_series_2vars(data, data1_label, data2_label, fig_size=[6.4, 4.8], 
 
     if fname_save != "":
         fig.savefig(fname_save, dpi=600, bbox_inches="tight")
-
 
 
 # TODO: 
@@ -291,7 +505,7 @@ def scatter_plot_ERA5_against_meas(data, fig_size, axis_lims, bin_width, fig_tit
 
     ymin = y.min()
     ymax = y.max()
-    bin_width = 0.2 # separate bin with 0.2 m/s
+    # bin_width = 0.2 # separate bin with 0.2 m/s
     nbins = np.ceil(max(xmax,ymax) / bin_width)
 
     # -------------------------------------------------
@@ -412,23 +626,6 @@ def scatter_plot_ERA5_against_meas(data, fig_size, axis_lims, bin_width, fig_tit
 def plot_wave_height_against_peak_period():
     pass
 
-def compute_spectrum(u, dt, nperseg=256):
-    '''
-    Compute spectrum of time series data
-    Parameters:
-        -u: np.array, time series data
-        -dt: float, sampling interval of data, in unit of seconds
-        -nperseg: length of each segment 
-
-    Returns:
-        -f: array of sample frequencies
-        - S: power spectral density
-    '''
-    fs = 1 / dt
-    u = u - np.mean(u)
-    f, S = welch(u, fs=fs, nperseg=nperseg)
-    return f[1:], S[1:]  # remove zero freq
-    
 
 def spectra_comparison(df, dt_modeled, fig_title):
     '''
@@ -524,3 +721,5 @@ def spectra_comparison(df, dt_modeled, fig_title):
     plt.tight_layout()
     plt.show()
 
+
+# %%

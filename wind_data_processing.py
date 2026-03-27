@@ -10,6 +10,13 @@ import numpy as np
 import math
 import pandas as pd
 from scipy.signal import welch
+import xarray as xr
+
+
+from visualizing import *
+
+
+
 
 #TODO: what are variance of wind speed at height 10 m (sigma) and turbulence intensity(TI)
 # as TI=sigma/U
@@ -94,7 +101,7 @@ def wind_speed_to_10m_power_law(U_z, z, z_ref=10, a=0.11):
     return np.multiply(U_z, np.power(z_ref/z, a))
 
 
-def quaility_control(wind_data, fixed_qc_criteria, data_interval, station, provider, checking_year, logger):
+def quality_control(wind_data, fixed_qc_criteria, data_interval, station, provider, checking_year, logger):
     '''
     QC procedure
     Skip period when there is no change in wind speed for 5 hours in consecutive 

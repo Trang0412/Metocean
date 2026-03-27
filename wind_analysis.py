@@ -20,7 +20,6 @@ import seaborn as sb
 import logging
 from datetime import datetime, timedelta
 
-from find_nearest_location import *
 from common_processing import *
 from visualizing import *
 from data_loading import *
@@ -54,11 +53,22 @@ running_mode = 'analysis' # 'checking' or 'analysis'
 #%%  1. Original ERA5 with Observations
 
 vars_metadata = pd.read_excel(working_dir + fname_metadata, sheet_name='ERA5_wind_obs', header=1)
+
 stations = vars_metadata['Name'].dropna()
 providers = vars_metadata['Provider'].dropna()
 
-skipping_stations =['중문해수욕장']
 
+#%% plot location of stations for wind checking (ERA5 vs. Regrided ERA5) and Jeju (PC1, PC2)
+
+bounding_area = {'lat':[33, 34.25], 'lon':[126, 127.75]}
+compare_statn = '거문도_KMA'
+
+plot_nearest_point_era5_regrid_era5(bounding_area, vars_metadata, era5_coor, regrid_era5_coor, compare_statn)
+
+
+#%%
+
+# skipping_stations =['중문해수욕장']
 for checking_year in range(longest_checking_duration_wind[0],longest_checking_duration_wind[1]):
     print(f'===================== Process data year {checking_year} ====================')
     if running_mode == 'analysis':
@@ -76,7 +86,7 @@ for checking_year in range(longest_checking_duration_wind[0],longest_checking_du
         
     for i in range(len(stations)):
         print(f'====================== Loading Observation data ======================')
-        if stations[i] not in skipping_stations: continue
+        # if stations[i] not in skipping_stations: continue
 
         checking_duration = vars_metadata['Wind data available'][i].split('-')
         checking_period = list(np.arange(int(checking_duration[0]), int(checking_duration[1])))
@@ -116,7 +126,7 @@ for checking_year in range(longest_checking_duration_wind[0],longest_checking_du
         wind_obs_1hr = wind_data.groupby(pd.Grouper(key=time_stamp, freq="1h")).mean().reset_index()
         
         # quality control
-        wind_data = quaility_control(wind_data, fixed_qc_criteria, vars_metadata['Data inteval (min)'][i], stations[i], providers[i], checking_year, logger)
+        wind_data = quality_control(wind_data, fixed_qc_criteria, vars_metadata['Data inteval (min)'][i], stations[i], providers[i], checking_year, logger)
 
         # compute 1hr-averaged 
         wind_obs_1hr_qc = wind_data.groupby(pd.Grouper(key=time_stamp, freq="1h")).mean().reset_index()

@@ -44,14 +44,17 @@ def load_obs_all_data(dir_data, provider, station, year=2024):
             data = pd.read_csv(matching_files[0], sep='\t', skiprows=3,)
         except:
             data = pd.read_csv(matching_files[0], sep='\t', skiprows=3,header=0, encoding='cp949')
+
         data = data.replace('-', np.nan) 
 
     elif provider == 'KMA':
         matching_files = list(path_station.glob(f'*_{year}_*'))
         data = pd.read_csv(matching_files[0], sep=',', header=0, encoding='cp949')
-        data = data.replace('-', np.nan) 
 
+        data = data.replace('-', np.nan) 
     return data
+
+
 
 
 

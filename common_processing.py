@@ -11,7 +11,24 @@ Compute various parameters from data
 import math
 import numpy as np
 import pandas as pd
+from scipy.signal import welch
 
+def compute_spectrum(u, dt, nperseg=256):
+    '''
+    Compute spectrum of time series data
+    Parameters:
+        -u: np.array, time series data
+        -dt: float, sampling interval of data, in unit of seconds
+        -nperseg: length of each segment 
+
+    Returns:
+        -f: array of sample frequencies
+        - S: power spectral density
+    '''
+    fs = 1 / dt
+    u = u - np.mean(u)
+    f, S = welch(u, fs=fs, nperseg=nperseg)
+    return f[1:], S[1:]  # remove zero freq
 
 def compute_data_avg_time(data, min_to_avg, data_interval, verbose=0):
     '''

@@ -5,11 +5,24 @@ Mapping variables's long name to short name according to Nomenclature in DHI-Wan
 @Author: Le Thi Trang
 @Date: Jan 23, 2026
 '''
+import numpy as np
+
 
 # TODO: Later change or add more variables to this dictionary
 # Mapping current available variables for naimg column in dataframe. 
 # E.g., used in measurements from different stations and provider
 # Adding more variables later
+
+# path definition here
+dir_data = 'D:\\InProbation\\Metocean\\Data\\'
+dir_analysis = 'D:\\InProbation\\Metocean\\Analysis\\'
+
+data_sources = ['KMA', 'KHOA', 'WINK']
+
+# origmesh_site_bathymetry_v1
+modeled_all_vars = ['Time', 'Hsig', 'Dir', 'Tm_10', 'RTpeak', 'Tm01', 'Tm02', 'Depth', 'Watlev', 'X-Vel', 'Y-Vel', 'X-Windv', 'Y-Windv', 'PkDir', 'Dspr']
+modeled_vars_type = ['string', 'float', 'float', 'float', 'float', 'float', 'float', 'float', 'float', 'float', 'float', 'float', 'float', 'float', 'float']
+
 
 # later put in station_metadata file and load as batch
 ws_name = '풍속(m/s)' # same for KMA and KHOA
@@ -84,3 +97,13 @@ fs_era5 = 1 / 3600      # hourly data (Hz)
 fs_ws_1h   = 1 / 3600
 fs_ws_2h   = 1 / (2 * 3600)
 fs_ws_3h   = 1 / (3 * 3600)
+
+# ERA5 coordination
+era5_coor = {
+    'lat': np.arange(32, 40, 0.25),
+    'lon': np.arange(120, 180, 0.25)
+}
+regrid_era5_coor = {
+    'lat': np.arange(20, 50, 0.05),
+    'lon': np.arange(120, 150, 0.05)
+}
