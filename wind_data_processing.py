@@ -60,22 +60,6 @@ def compute_ws_wd_from_u_v(u, v):
     return wind_speed, wind_direction
 
 
-#TODO: Jan 23, 2026
-def compute_wind_parameters():
-    '''
-    Function for obtaining wind parameters.
-    Refer to DNV-GL-2018 Metocean Characterization 
-    Recommended practice for US offshore wind energy
-
-    Wind parameters including:
-        Wind speed statistics (min, mean, std, max) and distribution
-        Wind directionality
-        Wind profile, wind shear, turbulence
-    '''
-    pass
-
-
-#TODO: convert surface wind from measurement data to 10-m height as in ERA5?
 # Jan 26, 2026
 # Refer to DHI report for Wando-Gumil:
 # measurements (60mMSL) were converted to 10mMSL using a power wind profile and a shear factor of 0.11.

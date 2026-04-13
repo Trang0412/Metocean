@@ -37,14 +37,65 @@ from scipy import stats
 from scipy.stats import binned_statistic_2d
 import numpy as np
 import xarray as xr
+import plotly
 
 from common_processing import *
 
 plt.rcParams['font.family'] = 'Malgun Gothic'
+
 plt.rc
 plt.rcParams['axes.unicode_minus'] = False
+from matplotlib.ticker import PercentFormatter
+
 
 #%%
+def plot_hist_cdf(data, bin_step, xlabel, ylabel_l, ylabel_r, fig_title):
+    ''' Plot histogram of data with cumulative distribution function overlays
+
+    Parameters:
+        -data: pd.DataFrame, 2 column with 1st: Timestamp, 2nd: measurement (e.g., wind speed)
+    Returns:
+    '''
+
+    fig, ax1 = plt.subplots()
+    upper_bound = max(max(data.iloc[:,1]), np.ceil(max(data.iloc[:,1])/2)*2)
+    bins = np.arange(0, upper_bound+bin_step, bin_step)
+    style = {'facecolor': 'none', 'edgecolor': 'C0', 'linewidth': 1}
+
+    counts, edges = np.histogram(data.iloc[:,1], bins=bins)
+    bar = ax1.bar(edges[:-1], counts, width=np.diff(edges), 
+                  align='edge', **style, 
+                  label = 'Histogram')
+    ax1.set_xlim(edges[0], edges[-1])
+    ax1.set_xlabel(xlabel)
+    ax1.set_ylabel(ylabel_l)
+    ax1.set_xticks(bins)
+    ax1.set_xlim(bins[0], bins[-1])
+    ax1.margins(x=0)
+
+    ax1.legend(handles=[bar], loc='upper left', bbox_to_anchor=(0.5, 0.8))
+    
+    ax2 = ax1.twinx()
+
+    cum = np.cumsum(counts) / np.sum(counts) * 100
+
+    y_cdf = np.insert(cum, 0, 0)
+    cdf_line = ax2.plot(
+        edges,  # align with left bin edges
+        y_cdf,
+        linestyle='--',
+        color='black',
+        linewidth=1.5, 
+        label = 'Cumulative Histogram',
+    )
+    ax2.legend(handles=cdf_line, loc='upper left', bbox_to_anchor=(0.5, 0.9))
+
+    ax2.set_ylim(0, 100)
+    ax2.set_ylabel(ylabel_r)
+    fig.suptitle(fig_title)
+
+    plt.show()
+
 
 # Mar 24, 2026
 
@@ -372,38 +423,36 @@ def plot_time_series_2vars(data, data1_label, data2_label, fig_size=[6.4, 4.8], 
 
 # TODO: 
 # Jan 22, 2026: - Check  the correctness of rose plot visualization
-def rose_plot(wind_direction, wind_speed, fig_title="", 
-                   sector_width=30, bins=[4,6,8,10,12,14,16,18,20], calm_limit=4,
+def rose_plot(speed, direction, fig_title="", speed_step=2,
+                   dir_sector=30, bins=[4,6,8,10,12,14,16,18,20], calm_limit=4,
                    label_pos=260, rticks_label=[5, 10, 15, 20], rmax_val = 20, 
                    ytick_labels=['5%', '10%', '15%', '20%'], bbox_anchor=(1, 0.1)):
     '''
     Rose plot for wind direction and wind_speed
     
     Parameters:
-        wind_direction: 1-D array, array data of wind direction
-        wind_speed: 1-D array, array data of wind speed
-        fig_title: string, figure's title
+        -speed: np.array, speed of measurement
+        -direction: np.array, direction of measurement
+        -fig_title: string, figure's title
+        -sector_width: float, width of degree sector. IEC suggest of 30, 22.5
+            default: 30
+        -bins: np.array, array of values as bins to put in legend
+        -calm_limit: float, upper bound value of wind when it is considered as calm
+            default: 2 (m/s)
+        -rmax_val: float, percentage 
     
     Return:
         None. Just showing plot
 
     '''
+    nsector = int(360/dir_sector)
 
-    # sector_width = 30 # plot for every 30 degree bin
-    nsector = int(360/sector_width)
-
-    # direction of wind is blow to or from?. Set blowto=True at current moment
-
-    # bins = [4,6,8,10,12,14,16,18,20]
+    bins = np.arange(calm_limit, max(speed)+speed_step, speed_step)
     fig = plt.figure(figsize=(3,3))
-
     ax = WindroseAxes.from_ax()
-
-
-    ax.bar(wind_direction, wind_speed, nsector=nsector, blowto=False, 
+    ax.bar(direction, speed, nsector=nsector, blowto=False, 
            bins = bins, normed=True,
            opening=1.0, edgecolor = 'black', calm_limit=calm_limit)
-
 
     ax.set_legend()
     ax.set_rmax(rmax_val)
@@ -411,7 +460,6 @@ def rose_plot(wind_direction, wind_speed, fig_title="",
     ax.set_yticklabels(ytick_labels)
     ax.set_rlabel_position(label_pos) 
     
-
     ax.legend(
         title="Wind speed (m/s)",
         loc="center left",
@@ -422,10 +470,31 @@ def rose_plot(wind_direction, wind_speed, fig_title="",
     plt.title(fig_title)
     plt.show()
 
-#TODO: Mar 10, 2026
-# Make dual rose plot
-def dual_rose_plot():
-    pass
+
+def wind_rose_plot(speed, direction, fig_title="", speed_step=2,
+                   dir_sector=30, bins=[4,6,8,10,12,14,16,18,20], calm_limit=4,
+                   label_pos=260, rticks_label=[5, 10, 15, 20], rmax_val = 20, 
+                   ytick_labels=['5%', '10%', '15%', '20%'], bbox_anchor=(1, 0.1)):
+    '''
+    Rose plot for wind direction and wind_speed
+    
+    Parameters:
+        -speed: np.array, speed of measurement
+        -direction: np.array, direction of measurement
+        -fig_title: string, figure's title
+        -sector_width: float, width of degree sector. IEC suggest of 30, 22.5
+            default: 30
+        -bins: np.array, array of values as bins to put in legend
+        -calm_limit: float, upper bound value of wind when it is considered as calm
+            default: 2 (m/s)
+        -rmax_val: float, percentage 
+    
+    Return:
+        None. Just showing plot
+
+    '''
+    ax = plt.subplot(111, projection='polar')
+    ax.bar(direction, speed)
 
 
 #TODO: make custom colormap later  
@@ -620,14 +689,7 @@ def scatter_plot_ERA5_against_meas(data, fig_size, axis_lims, bin_width, fig_tit
         fig.savefig(fname_save) 
 
 
-#TODO: Refer to feasibility assessment stated in DNV-GL-2018, DHI report on Wando-Gumil (section 7.5)
-# Part: Wave conditions (p.24)
-# 
-def plot_wave_height_against_peak_period():
-    pass
-
-
-def spectra_comparison(df, dt_modeled, fig_title):
+def spectra_comparison(df, dt_modeled, x_lim, y_lim, fig_title):
     '''
     Compute empirical spectrl of wind speed using FFT
     Parameters:
@@ -723,3 +785,80 @@ def spectra_comparison(df, dt_modeled, fig_title):
 
 
 # %%
+def plot_wind_spectra_comparison(df_ws_combine, sampling_interval, f_ref, x_lim, y_lim, fig_title):
+    ''' Visualize sepctrum density of wind for ERA5 and observed data averaged over 1,2,3h
+    Parameters:
+        -df: pd.DataFrame, 3 columnes   
+            1st: timestemp
+            2nd: oberved wind speed
+            3rd: era5 wind speed
+        -sampling_interval: float, sampling interval of data, represented in seconds 
+
+    Returns:
+        dict_spect: dictionary of frequency as keys and spectra as values
+    '''
+
+    plt.rcParams['text.usetext'] = True
+    df_ws_combine = df_ws_combine.dropna()
+ 
+    col_names = df_ws_combine.columns
+    obs_1h = df_ws_combine.iloc[:,[0,1]]
+
+    obs_2h = obs_1h.groupby(pd.Grouper(key=col_names[0], freq='2h')).mean().reset_index()
+    obs_3h = obs_1h.groupby(pd.Grouper(key=col_names[0], freq='3h')).mean().reset_index()
+
+    obs_2h.dropna(inplace=True)
+    obs_3h.dropna(inplace=True)
+
+    # compute spectrum
+    f_1h, S_1h = compute_spectrum(obs_1h.iloc[:,1].values, sampling_interval)
+    f_2h, S_2h = compute_spectrum(obs_2h.iloc[:,1].values, sampling_interval*2)
+    f_3h, S_3h = compute_spectrum(obs_3h.iloc[:,1].values, sampling_interval*3)
+
+    f_era5, S_era5 = compute_spectrum(df_ws_combine.iloc[:,2].values, sampling_interval)
+
+    # plot
+    plt.loglog(f_era5, S_era5/np.power(df_ws_combine.iloc[:,2].std(),2), 'k', label='ERA5', linewidth=1)
+
+    plt.loglog(f_1h, S_1h/np.power(obs_1h.iloc[:,1].std(),2), 'royalblue', label='Measurements (1h)', linewidth=1)
+    plt.loglog(f_2h, S_2h/np.power(obs_2h.iloc[:,1].std(),2), 'forestgreen', label='Measurements (2h)', linewidth=1)
+    plt.loglog(f_3h, S_3h/np.power(obs_3h.iloc[:,1].std(),2), 'darkorange', label='Measurements (3h)', linewidth=1)
+
+    # plot -5/3 line (slope line)
+    # f_ref = 1e-5 # roughly 1 hour
+    S_ref = np.interp(f_ref, f_1h, S_1h/np.power(obs_1h.iloc[:,1].std(),2))
+    k = np.logspace(-6.5,-3,100)
+    slope_line = S_ref *(k / f_ref)**(-5/3) # why??
+    plt.loglog(k, slope_line, 'grey', linewidth=1)
+    plt.text(1e-6, 1e6, r'$k^{-5/3}$')
+    plt.grid(color='0.8', linestyle='-', linewidth=0.3, which='minor')
+    
+    # add timeline of 20 mins, 1h, 2h, 3h, 12h, 1day, 1 year
+    time_lines = [20*60, 60*60, 2*60*60,  3*60*60,  12*60*60,  24*60*60, 365*24*60*60]
+    freq_spot = [1/time for time in time_lines]
+
+    vline_legends = ['20 min', '1 h', '2 h', '3 h', '12 h', '1 Day', '1 Year']
+    for i, x_vline in enumerate(freq_spot):
+        plt.vlines(x_vline, y_lim[0], y_lim[1], linestyles='--', linewidth=0.7, colors='k')
+        plt.text(x_vline*np.power(10, 0.03), np.power(10, -0.7), vline_legends[i], rotation='vertical')
+
+    # setting tick labels as minus sign is not correctly displayed by matplotlib
+    x_ticks = np.logspace(-8, -2, 7)
+    y_ticks = np.logspace(-1, 7, 9)
+
+    x_tick_labels =[r'$10^{-8}$', r'$10^{-7}$', r'$10^{-6}$', r'$10^{-5}$', 
+                    r'$10^{-4}$', r'$10^{-3}$', r'$10^{-2}$']
+    y_tick_labels =[r'$10^{-1}$', r'$10^0$', r'$10^1$', r'$10^2$', 
+                    r'$10^3$', r'$10^4$', r'$10^5$', r'$10^6$', r'$10^7$']
+
+    plt.xlim(x_lim)
+    plt.ylim(y_lim)
+    plt.xticks(x_ticks, x_tick_labels)
+    plt.yticks(y_ticks, y_tick_labels)
+    plt.xlabel('f [Hz]')
+    plt.ylabel(r'$S/\sigma^2$ [s]')
+
+    plt.legend(fontsize=9)
+    plt.title(fig_title)
+
+    plt.show

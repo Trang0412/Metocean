@@ -42,7 +42,7 @@ logger = logging.getLogger(__name__)
 logging.basicConfig(filename= working_dir +'Wind_analysis log.log', filemode='w', encoding='utf-8', level=logging.INFO)
 nl  = '\n'
 
-era5_type = 'windfield_0.05' # korea_0.25, windfield_0.05
+era5_type = 'korea_0.25' # korea_0.25, windfield_0.05
 analysis_saving_dir = working_dir + 'ERA5_vs_Obs\\' + era5_type
 if not os.path.exists(analysis_saving_dir):
     os.makedirs(analysis_saving_dir)
@@ -60,10 +60,10 @@ providers = vars_metadata['Provider'].dropna()
 
 #%% plot location of stations for wind checking (ERA5 vs. Regrided ERA5) and Jeju (PC1, PC2)
 
-bounding_area = {'lat':[33, 34.25], 'lon':[126, 127.75]}
-compare_statn = '거문도_KMA'
+# bounding_area = {'lat':[33, 34.25], 'lon':[126, 127.75]}
+# compare_statn = '거문도_KMA'
 
-plot_nearest_point_era5_regrid_era5(bounding_area, vars_metadata, era5_coor, regrid_era5_coor, compare_statn)
+# plot_nearest_point_era5_regrid_era5(bounding_area, vars_metadata, era5_coor, regrid_era5_coor, compare_statn)
 
 
 #%%
@@ -191,7 +191,7 @@ for checking_year in range(longest_checking_duration_wind[0],longest_checking_du
                 logger.error(f'{pd.Timestamp.today().date} Time series and/or scatter plot are not successfully finished for {stations[i]}, {checking_year}')
 
             ####################################################################################
-            #TODO: Wind spectral comparison between Observation with ERA5 
+            #TODO: April 03, 2026; Wind spectral comparison between Observation with ERA5 
             fname_save = f'Spectral comparison of ERA5 and measured WS'
             fig_title = f'{stations[i]}_{providers[i]}{nl}Temporal Average {df_ws_combine.iloc[0,0].date()} - {df_ws_combine.iloc[-1,0].date()}'
             spectra_comparison(df_ws_combine, 3600, fig_title)

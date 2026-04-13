@@ -32,7 +32,7 @@ from wind_data_processing import *
 #%%
 dir_modeled_data = dir_data + 'Modeled\\'
 dir_obs_data = dir_data + 'Observations\\'
-modeled_data_name = 'origmesh_site_bathymetry_v1\\simulation_260324\\'
+modeled_data_name = 'origmesh_site_bathymetry_v1\\simulation_260331\\'
 
 
 dir_fig_save = dir_analysis + 'Obs_Modeled\\Wave\\' + modeled_data_name
@@ -73,7 +73,12 @@ for checking_loc in model_locs:
             modeled_data = pd.concat([modeled_data, data], ignore_index=True).drop_duplicates(subset=['Time'], keep='first')
             del data
 
-    obs_data = load_obs_all_data(dir_obs_data, 'KMA', model_locs[checking_loc],2025)
+    # Mar 30
+    if checking_loc == 'Buoy1':
+        obs_data = pd.read_csv(dir_obs_data + 'KMA\\구엄\\OBS_CWBUOY_TIM_20260330112010.csv', sep=',', header=0, encoding='cp949')
+
+    else:
+        obs_data = load_obs_all_data(dir_obs_data, 'KMA', model_locs[checking_loc], 2025)
 
     if '파향(deg)' in obs_data.columns:
         # vars_to_check = ['Time', 'Hsig', 'Tm_10', 'Dir']
@@ -85,36 +90,43 @@ for checking_loc in model_locs:
         vars_type=['datetime64[ns]', 'float', 'float']
         wave_params = [kma_timestamp, '유의파고(m)', '파주기(sec)']
 
-    modeled_wave = modeled_data[vars_to_check]
-    modeled_wave.rename(columns=dict(zip(vars_to_check, wave_params)), inplace=True)
-    # correct to 9h head
-    modeled_wave[kma_timestamp] = pd.DatetimeIndex(modeled_wave[kma_timestamp]) + timedelta(hours=-9)
 
     obs_wave = obs_data[wave_params].astype(dict(zip(wave_params, vars_type)))
     # obs_wave_qc = quality_control(obs_wave)
-
     obs_wave_1hr = obs_wave.groupby(pd.Grouper(key=kma_timestamp, freq="1h")).mean().reset_index()
 
-    ####################################################################################
-    # Comparison between Observation with Modeled data 
-    df_wave_combine = pd.merge(obs_wave_1hr, modeled_wave, on=kma_timestamp, how='right', suffixes=['_obs', '_modeled'])
+    # change time of modeled data
+    # Mar 31: Output of modeled is UTC time => move modeled to 9hours forward
+    # name_postfix = ['_minus_9hour', '' , '_plus_9hour']
+    name_postfix= ['']
+    for ti, deltat in enumerate([9]):
+        modeled_wave = modeled_data[vars_to_check]
+        modeled_wave.rename(columns=dict(zip(vars_to_check, wave_params)), inplace=True)
+
+        ####################################################################################
+        # Comparison between Observation with Modeled data 
+        # correct to 9h head
+        modeled_wave[kma_timestamp] = pd.DatetimeIndex(modeled_wave[kma_timestamp]) + timedelta(hours=deltat)
+        df_wave_combine = pd.merge(obs_wave_1hr, modeled_wave, on=kma_timestamp, how='right', suffixes=['_obs', '_modeled'])
 
 
-    for param_checking in wave_params[1:]:
-        print(param_checking)
-        if '파주기' in param_checking:
-            fname_save = f'{checking_loc}_{param_checking}_{wave_period_var}_minus_9hour'
-        else: 
-            fname_save = f'{checking_loc}_{param_checking}_minus_9hour'
-        fig_title = f'{checking_loc} ({model_locs[checking_loc]}) {df_wave_combine.iloc[0,0].date()} - {df_wave_combine.iloc[-1,0].date()} - 9hrs'
-        plot_time_series_2vars(df_wave_combine[[kma_timestamp, param_checking+'_obs', param_checking+'_modeled']], 'Observation', 'Modeled', 
-                            [12, 3], fig_title, dir_fig_save + '\\'+ fname_save)
-        # scatter_plot_ERA5_against_meas(df_wave_combine[[kma_timestamp, param_checking+'_obs', param_checking+'_modeled']], 
-        #                                [9,6], [0, np.max([32, df_wave_combine.iloc[:,1].max()+5, df_wave_combine.iloc[:,2].max()+5])], 
-        #                                bin_width=0.2, fig_title=fig_title, fname_save = dir_fig_save + '\\'+ fname_save)
+        for param_checking in wave_params[1:]:
+            print(param_checking)
+            if '파주기' in param_checking:
+                fname_save = f'{checking_loc}_{param_checking}_{wave_period_var}{name_postfix[ti]}'
+            else: 
+                fname_save = f'{checking_loc}_{param_checking}{name_postfix[ti]}'
+            fig_title = f'{checking_loc} ({model_locs[checking_loc]}) {df_wave_combine.iloc[0,0].date()} - {df_wave_combine.iloc[-1,0].date()}{name_postfix[ti]}'
+            plot_time_series_2vars(df_wave_combine[[kma_timestamp, param_checking+'_obs', param_checking+'_modeled']], 'Observation', 'Modeled', 
+                                [12, 3], fig_title, dir_fig_save + '\\'+ fname_save)
+            # scatter_plot_ERA5_against_meas(df_wave_combine[[kma_timestamp, param_checking+'_obs', param_checking+'_modeled']], 
+            #                                [9,6], [0, np.max([32, df_wave_combine.iloc[:,1].max()+5, df_wave_combine.iloc[:,2].max()+5])], 
+            #                                bin_width=0.2, fig_title=fig_title, fname_save = dir_fig_save + '\\'+ fname_save)
 
+        del modeled_wave
 
 # %%
+
 def quality_control(data, fixed_qc_criteria, data_interval, station='', provider='', checking_year=''):
     '''
     QC procedure

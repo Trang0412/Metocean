@@ -12,6 +12,11 @@ import math
 import numpy as np
 import pandas as pd
 from scipy.signal import welch
+import utide
+
+from pyextremes import EVA
+import scipy.stats as sstats
+import matplotlib.pyplot as plt
 
 def compute_spectrum(u, dt, nperseg=256):
     '''
@@ -23,7 +28,7 @@ def compute_spectrum(u, dt, nperseg=256):
 
     Returns:
         -f: array of sample frequencies
-        - S: power spectral density
+        -S: power spectral density
     '''
     fs = 1 / dt
     u = u - np.mean(u)
@@ -152,3 +157,125 @@ def find_duplicate(data, time_stamp):
             idxs_to_remove[i] = ri-1
 
     return idxs_to_remove
+
+
+
+def separate_tide_nontide(water_data, lat):
+    '''
+    Separate tide from non-tide water level using U-tide toolbox
+    Parameters:
+        -water_data: pd.DataFrame, 2 columns: [Timestamp, total_water]
+        -lat: coordiate degree, latitude of checking station
+
+    Returns:
+        -water_data: pd.DataFrame, orignal water_data with 2 added columns of prediction, residual
+            
+    '''
+    # separate tide from non-tide
+    water_data['anomaly'] = water_data.iloc[:,1] - water_data.iloc[:,1].mean()
+    water_data['anomaly'] = water_data['anomaly'].interpolate()
+
+    coef = utide.solve(
+        water_data.iloc[:,0].values,
+        water_data['anomaly'],
+        lat=lat,
+        method="ols",
+        conf_int="MC",
+        verbose=False,
+    )
+
+    tide = utide.reconstruct(water_data.iloc[:,0].values, coef, verbose=False)
+    water_data['pred'] = tide.h 
+    water_data['res'] = water_data['anomaly'] - tide.h
+
+    return water_data
+
+
+def run_EVA(extremes, lambda_val, method, dist, n_boot):
+    '''
+    Implement extreme value analysis with scipy package
+    
+    Parameters:
+        -extremes: np.array
+        -lambda_val: float, number of events per year
+        -method: fitting method, e.g., MLE or LS.
+        -dist: scipy.stats.rv_continuous
+    Returns:
+    '''
+
+    n_boot = 1000
+    # the data below is annual maxima of water level observation in  Seongsanpo from 2005 to 2023
+    extremes = [1.67015374, 1.43289266, 1.40997653, 1.20210067, 1.52954745,
+       1.67473259, 1.52111837, 1.151129  , 1.57407068, 1.31543996,
+       1.41652406, 1.62690578, 1.351144  , 1.30937085, 1.3373861 ,
+       1.34301544, 1.55128144, 1.70173519, 1.51813407, 1.40527482,
+       1.38776519, 1.31808503, 1.26137727, 1.22153415, 2.01295661,
+       1.25276447, 2.10148656, 1.39815181, 1.63293536, 1.30324747,
+       1.29225385, 1.23411466, 1.35503323, 2.29583226, 1.77616051,
+       1.95658643, 1.31342783, 1.2196131 , 1.30735572, 1.70144015,
+       1.33276883, 1.70839311, 1.36754139, 1.5621796 , 1.32059285,
+       1.51901091, 1.55059889, 1.33983393, 1.1873526 , 1.3093231 ,
+       1.53079275, 1.79188616, 1.43536119, 1.61609417, 1.29006074,
+       1.22047454, 1.34422221, 1.76126473, 1.61996553, 1.31136114,
+       1.67433556, 1.27915859, 1.3983121 , 1.29791285, 1.79748456,
+       1.28310562, 2.10828448, 1.40977466, 1.29211513, 1.67189802,
+       1.4337882 , 1.4713478 , 1.327887  , 1.24492218, 1.19244187,
+       1.25186284, 1.46947683, 1.33171907, 1.37144485, 1.4345746 ,
+       1.43411848, 1.41803528, 1.47092009, 1.79576925, 1.96858465,
+       3.35721758, 1.35275823, 1.40191904, 1.31662476, 1.49880755,
+       1.36267196, 1.62302015, 1.38779227, 1.20164883]
+
+    
+    T = np.linspace(1.1, 200, 200)
+    F = 1 - 1/T
+
+    n = len(extremes)
+    
+    loc, scale = sstats.gumbel_r.fit(extremes)
+    gumbel_rl = sstats.gumbel_r.ppf(F, loc=loc, scale=scale)
+
+    rl_boot = []
+    for _ in range(n_boot):
+        sample = np.random.choice(extremes, size=len(extremes), replace=True)
+        loc_b, scale_b = sstats.gumbel_r.fit(sample)
+        rl_boot.append(sstats.gumbel_r.ppf(F, loc=loc_b, scale=scale_b))
+
+    rl_boot = np.array(rl_boot)
+
+    lower = np.percentile(rl_boot, 2.5, axis=0)
+    upper = np.percentile(rl_boot, 97.5, axis=0)
+
+    sorted_data = np.sort(extremes)
+    P = np.arange(1, n+1) / (n+1)
+    T_emp = 1 / (1 - P)
+
+    # -----------------------------
+    # Plot
+    # -----------------------------
+    plt.figure(figsize=(8,6))
+
+    plt.scatter(T_emp, sorted_data, label="Observed AM")
+    plt.plot(T, gumbel_rl, 'r-', label="Gumbel fit")
+
+    plt.fill_between(T, lower, upper, alpha=0.3, label="95% CI")
+
+    plt.xscale('log')
+    plt.xlabel("Return Period (years)")
+    plt.ylabel("Water Level")
+    plt.title("Gumbel Fit with Bootstrap Confidence Interval")
+    plt.legend()
+    plt.grid(True)
+    plt.show()
+
+    # probability density plot
+    x_r = np.linspace(sstats.gumbel_r.ppf(0.001, loc=loc, scale=scale),
+                sstats.gumbel_r.ppf(0.999, loc=loc, scale=scale), 1000)
+    
+    plt.figure()
+    plt.hist(extremes, bins=np.histogram_bin_edges(extremes, bins='auto'), 
+             density=True,
+             rwidth=0.8, lw=0, zorder=5)
+    
+    plt.plot(x_r, sstats.gumbel_r.pdf(x_r, loc=loc, scale=scale))
+
+    
