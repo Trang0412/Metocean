@@ -14,6 +14,107 @@ from pathlib import Path
 pd.set_option('future.no_silent_downcasting', True)
 from metocean_metadata import *
 
+import linecache
+
+
+def load_fort61(dir_hot, col_names=['관측시간', '조위(cm)'], to_kst=True, start_lidx=3, first_data_lidx=4):
+    ''' Load modeled data from ADCIRC 
+    Parameters:
+        -dir_hot: str, directory of 'hot_' folder from simulation
+        -col_names: list, list of columne name for loading in data to pd.DataFrame, 1st: timestamp, 2: Name of parameters checking
+        -start_lidx: int, index of line with time step of writing 
+            Content will look like this: 3.4620000000E+005         346200), 
+            Line count start from 1. 
+        -first_data_lidx: int, index of first line of data writing
+            Content will look like this: 1     6.5347367811E-001), where 1: point index, 2nd value is modeled data
+    Returns:
+        -Dictionary with key as stations' names and values are pd.DataFrame writen with columns of ['Timestamp', 'Water level (m)']
+
+
+    '''
+    # reading control parameters from fort.15
+    adcirc_params, wl_stations = read_fort15_wl(dir_hot)
+    write_interval = pd.to_timedelta(int(adcirc_params['ELEV_interval']), unit='s')/pd.Timedelta(minutes=1) # fix to use metadata for water elevation at current moment, April 30, 2026
+    simul_time = read_fort26(dir_hot)
+    with open(dir_hot + 'fort.61', 'r') as f:
+        line_count = sum(1 for line in f)
+
+    fname_61 = dir_hot + 'fort.61'
+    n_stations = len(wl_stations)
+    start_time_line = linecache.getline(fname_61, start_lidx)
+    all_stations_data = dict()
+
+    for si in range(n_stations):
+        write_time = simul_time['start'] + pd.to_timedelta(float(start_time_line.split()[1]), unit='s')
+        statn_lidxs = np.arange(first_data_lidx+si, line_count, n_stations+1)
+        statn_data = pd.DataFrame(columns=col_names)
+
+        for lidx in statn_lidxs:
+            statn_data.loc[len(statn_data)] = [write_time,float(linecache.getline(fname_61, lidx).split()[1])]
+            write_time = write_time+pd.Timedelta(minutes=write_interval)
+            
+        statn_data = statn_data[statn_data[col_names[0]]>=statn_data.iloc[0,0]+pd.Timedelta(hours=23)]
+        # shift to kst time
+        if to_kst:
+            statn_data[col_names[0]] = statn_data[col_names[0]] + pd.Timedelta(hours=9)
+        # modeled data return water with unit of meter while observation recorded in cm level
+        if col_names[1] == '조위(cm)':
+            statn_data[col_names[1]] = statn_data[col_names[1]]*100 
+        all_stations_data[wl_stations['Name'][si]] = statn_data
+
+    return all_stations_data
+
+
+def read_fort26(dir_hot):
+    
+    fname = dir_hot + 'fort.26'
+    simul_time = dict()
+    with open(fname, 'r') as fortfile:
+        for line in reversed(fortfile.readlines()):
+            if 'COMPUTE ' in line: 
+                time_ = line.split()[1]
+                simul_time['start'] = pd.to_datetime(f'{time_[0:4]}-{time_[4:6]}-{time_[6:8]} {time_[9:11]}:{time_[11:13]}:{time_[13:15]}')
+                time_ = line.split()[4]
+                simul_time['end'] = pd.to_datetime(f'{time_[0:4]}-{time_[4:6]}-{time_[6:8]} {time_[9:11]}:{time_[11:13]}:{time_[13:15]}')
+                simul_time['interval'] = float(line.split()[2])*60
+
+                break             
+
+    return simul_time
+
+def read_fort15_wl(dir_fort15):
+    ''' Reading control parameters from ADCIRC model by assign value for keys of params in metocean_metadata
+    Always check format of fort.15 as the code here is hard-coded for current format
+    Parameters:
+        -dir_fort15: str, directory to fort.15 file
+    Returns:
+        -adcirc_params: dict, dictionary of settings of different parameters, e.g., 'DT', 'RNDAY', etc.
+        -wl_stations: pd.DataFrame, 3 columns of [Name, lon, lat]
+
+    '''
+    adcirc_params = dict()
+    fname = dir_fort15 + 'fort.15'
+    with open(fname, 'r') as fort15:
+        for lidx, line in enumerate(fort15.readlines()):
+            if ' DT ' in line: adcirc_params['DT'] = float(line.split()[0])
+            if ' RNDAY ' in line: adcirc_params['RNDAY'] = float(line.split()[0])
+            if 'ELEV ' in line: 
+                adcirc_params['ELEV'] = True
+                adcirc_params['ELEV_interval'] = float(line.split()[3])
+                break             
+
+    if adcirc_params['ELEV']:
+        
+        adcirc_params['ELEV_num_statns'] = int(linecache.getline(fname, lidx+2).split()[0])
+        wl_stations = pd.DataFrame(columns=['Name', 'lon', 'lat'])
+        for i in range(adcirc_params['ELEV_num_statns']):
+            wl_stations.loc[len(wl_stations)] = [linecache.getline(fname, lidx+3+i).split()[3],
+                                                        float(linecache.getline(fname, lidx+3+i).split()[0]),
+                                                        float(linecache.getline(fname, lidx+3+i).split()[1])
+                                                        ]
+
+
+    return adcirc_params, wl_stations
 
 
 
@@ -37,7 +138,7 @@ def load_obs_all_data(dir_data, provider, station, year=2024):
 
     dir_station = dir_data +  provider + '\\' + station + '\\'
     path_station = Path(dir_station)
-
+    data = pd.DataFrame()
     if provider == 'KHOA':
         matching_files = list(path_station.glob(f'{year}*'))
         try:
@@ -53,10 +154,6 @@ def load_obs_all_data(dir_data, provider, station, year=2024):
 
         data = data.replace('-', np.nan) 
     return data
-
-
-
-
 
 
 def load_era5_wind_data(dir_data, var_name, year=2024):

@@ -8,6 +8,18 @@
 
 '''
 #%%
+
+import sys
+import os
+sys.path.append('D:\\InProbation\\Metocean\\scripts')
+
+import common_processing
+import visualizing
+import data_loading
+import metocean_metadata
+import wind_data_processing
+
+
 import pandas as pd
 import xarray as xr
 import numpy as np
@@ -32,7 +44,7 @@ from wind_data_processing import *
 #%%
 dir_modeled_data = dir_data + 'Modeled\\'
 dir_obs_data = dir_data + 'Observations\\'
-modeled_data_name = 'origmesh_site_bathymetry_v1\\simulation_260331\\'
+modeled_data_name = 'refined_mesh\\simulation_20260422\\'
 
 
 dir_fig_save = dir_analysis + 'Obs_Modeled\\Wave\\' + modeled_data_name
@@ -92,7 +104,11 @@ for checking_loc in model_locs:
 
 
     obs_wave = obs_data[wave_params].astype(dict(zip(wave_params, vars_type)))
-    # obs_wave_qc = quality_control(obs_wave)
+    data_interval = np.unique(np.diff(obs_wave[kma_timestamp]))
+    data_interval = data_interval[0] / np.timedelta64(1, 'm') # convert to minute, assuming data are recoreded with same interval for whole year period
+       
+
+    obs_wave_qc = wave_quality_control(obs_wave, fixed_qc_criteria, data_interval)
     obs_wave_1hr = obs_wave.groupby(pd.Grouper(key=kma_timestamp, freq="1h")).mean().reset_index()
 
     # change time of modeled data
@@ -114,60 +130,21 @@ for checking_loc in model_locs:
             print(param_checking)
             if '파주기' in param_checking:
                 fname_save = f'{checking_loc}_{param_checking}_{wave_period_var}{name_postfix[ti]}'
+                ylabel_text = 'Tp [s]'
             else: 
                 fname_save = f'{checking_loc}_{param_checking}{name_postfix[ti]}'
+                ylabel_text = 'Hs [m]'
             fig_title = f'{checking_loc} ({model_locs[checking_loc]}) {df_wave_combine.iloc[0,0].date()} - {df_wave_combine.iloc[-1,0].date()}{name_postfix[ti]}'
-            plot_time_series_2vars(df_wave_combine[[kma_timestamp, param_checking+'_obs', param_checking+'_modeled']], 'Observation', 'Modeled', 
-                                [12, 3], fig_title, dir_fig_save + '\\'+ fname_save)
-            # scatter_plot_ERA5_against_meas(df_wave_combine[[kma_timestamp, param_checking+'_obs', param_checking+'_modeled']], 
-            #                                [9,6], [0, np.max([32, df_wave_combine.iloc[:,1].max()+5, df_wave_combine.iloc[:,2].max()+5])], 
-            #                                bin_width=0.2, fig_title=fig_title, fname_save = dir_fig_save + '\\'+ fname_save)
+            plot_time_series_2vars(df_wave_combine[[kma_timestamp, param_checking+'_obs', param_checking+'_modeled']],
+                                    'Observation', 'Modeled', [9, 4], fig_title, dir_fig_save + '\\'+ fname_save,
+                                    fc1='#F67A0D', fc2='#3C88BD', plot_type='MIT', lstyle1 = '-', lstyle2='--',
+                                    ylabel_text=ylabel_text, xtick_rotation=0)
+            scatter_plot_ERA5_against_meas(df_wave_combine[[kma_timestamp, param_checking+'_obs', param_checking+'_modeled']], 
+                                           [9,6], [0, np.max([10, df_wave_combine.iloc[:,1].max()+5, df_wave_combine.iloc[:,2].max()+5])], 
+                                           bin_width=0.1, x_tick=1, fig_title=fig_title, fname_save = dir_fig_save + '\\'+ fname_save+'_scatter')
 
         del modeled_wave
 
 # %%
 
-def quality_control(data, fixed_qc_criteria, data_interval, station='', provider='', checking_year=''):
-    '''
-    QC procedure
-    Skip period when there is no change in wind speed for 5 hours in consecutive 
-    Example: Seongsanpo 2008 from 2008-02-01 to 2008-06-15, probably error in device
-    Mar 16, 2026: Automate the process by checking the flat line/degree of changes between consecutive points then casting 
-    those points with no changes between, say, for 20 consecutive points 
-    (e.g., 20 minutes for 1-min interval data, 1 hour for 5  minute interval data and 5 hours for 1 hr interval)
-    Set wind speed outside the range of [0, 60] is missing value
-    
-
-    Parameters: 
-        - data: pd.DataFrame, including 3 columns of time stamp, wind speed, wind direction
-        - data_interval: integer, temporal interval of observation data, in minutes
-        - logger: logger, for logging station and year
-        - station: string, for logging station name
-        - provider: string, for logging station provider
-        - checking_year: integer, for logging data year in process
-
-    
-    Return:
-        -data: pd.DataFrame, wind data with quality controlled
-    '''
-    time_stamp = data.columns[0]
-    data = data.set_index(time_stamp)
-    data[data['파주기(sec)']<fixed_qc_criteria['T02'][0]] = pd.NA
-    data[data['유의파고(m)']>fixed_qc_criteria['Hm0'][1]] = pd.NA
-    try:
-        data[data['파향(deg)']<fixed_qc_criteria['direction'][0]] = pd.NA
-    except: pass
-
-    value_groups = (data['유의파고(m)'] != data['유의파고(m)'].shift()).cumsum()
-    if data_interval == 1:
-        stuck_periods = data.groupby(value_groups).filter(lambda x: len(x) > 20).reset_index()
-    if data_interval == 5:
-        stuck_periods = data.groupby(value_groups).filter(lambda x: len(x) > 12).reset_index()
-    if data_interval == 60:
-        stuck_periods = data.groupby(value_groups).filter(lambda x: len(x) > 5).reset_index()
-
-    data.loc[stuck_periods[time_stamp]] = pd.NA
-    data = data.reset_index()
-
-    return data
 # %%
