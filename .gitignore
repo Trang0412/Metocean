@@ -4,11 +4,8 @@ __pycache__/
 #ignore vscode setting
 .vscode/
 
-extreme_conditions/
-.ipynb_checkpoints/
+**/.ipynb_checkpoints/
 .virtual_documents/
-in_dev/
-temp/
+extreme_conditions/in_dev/
+extreme_conditions/temp/
 
-normal_conditions/
-.ipynb_checkpoints/
