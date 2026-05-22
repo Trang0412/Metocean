@@ -19,7 +19,16 @@ from visualizing import *
 from geopy.distance import great_circle
 from geopy.distance import geodesic
 from matplotlib import patches as mpatches
+import glob
 
+from data_loading import *
+
+
+
+
+#TODO
+def compare_wink_jra3q_vs_ERA5_typhoon_wind():
+    pass
 
 def convert_wind_gust_temporal(gust_data, cond='TC', gf_orig=1.22, gf_conv=1.06):
     '''Conversion wind speed between different duration averaged. 
@@ -37,11 +46,7 @@ def convert_wind_gust_temporal(gust_data, cond='TC', gf_orig=1.22, gf_conv=1.06)
         -conv_gust: np.ndarray, wind gusts at conversion time
     '''
     return gust_data * (gf_conv/gf_orig)
-#TODO
-def do_extreme_wind_analysis():
-    '''Composite procedure for conducting extreme wind analysis
-    '''
-    pass
+
 #TODO
 def combine_typhoon_wind_data():
     '''
@@ -49,15 +54,28 @@ def combine_typhoon_wind_data():
     '''
     pass
 
-#TODO
-def remove_typhoon_wind_data():
-    '''
-    Remove wind data during typhoon affected period for non-typhoon extreme wind analysis 
-    '''
-    pass
 
-#TODO: analyse jma msm data
-def sel_typhoon_affected(ref_point, search_cri, dir_btd, dir_wink, fname_save=''):
+def extract_era5_non_typhoon_wind(typhoon_sel, era5_wind, time_col_name):
+    '''
+    Remove wind data during typhoon affected period from ERA5 wind data for non-typhoon extreme wind analysis 
+    and return non-typhoon wind data for all 50 years of data from 1979-2025
+    Parameters:
+        -typhoon_sel: pd.DataFrame, information on [Name, Start time, End time] of typhoons selected, 
+            where time here is affecting time to the study site
+        -era5_wind: pd.DataFrame, ERA5 wind data for whole period of 1979-2025
+        -time_col_name: str, column name of time stamp, varies between data type
+    Returns:
+        -era5_wind: pd.DataFrame, 3 columns of [Time, wind speed, wind direction] with data during typhoon period dropped
+
+    '''
+    
+    for i in range(len(typhoon_sel)):
+        era5_wind = era5_wind[~((era5_wind[time_col_name]>typhoon_sel['Start time'][i]) & (era5_wind[time_col_name]<typhoon_sel['End time'][i]))]
+    
+    return era5_wind
+
+
+def sel_typhoon_affected(ref_point, search_cri, dir_btd, dir_wink, dir_jra3q, fname_save=''):
     '''
     Select which typhoons to be included for analysis points during analysis period
     Use JMA typhoon best track data (BTD) and follow DHI section 2.4 for criteria of choosing typhoons
@@ -69,6 +87,7 @@ def sel_typhoon_affected(ref_point, search_cri, dir_btd, dir_wink, fname_save=''
         -search_cri: pd.DataFrame, search criteria, loaded from metocean_metadata 
         -dir_btd: str, directory to Best Track Data
         -dir_wink: str, directory to Wink typhoon wind field data
+        -dir_jra3q: str, directory to JRA-3Q reanalysis data for reading wind during typhoon duration from 2001-2025
 
     Returns:
         -typhoons_sel: pd.DataFrame, 2 columns of [Year, Name] for a list of typhoons selected  
@@ -76,57 +95,208 @@ def sel_typhoon_affected(ref_point, search_cri, dir_btd, dir_wink, fname_save=''
     
     # read all typhoon information from best track data and wink
     btd_typhoons = read_jma_btd(dir_btd)
-    wink_mdata = read_typhoon_wink_metadata(dir_wink)
-    
-    # compute distance between reference point to all the point in wink grid
-    d_wink = np.zeros((len(wink_lat_points), len(wink_lon_points)))
-    for i in range(len(wink_lat_points)):
-        for j in range( len(wink_lon_points)):
-            point = (wink_grid_lat[i, j], wink_grid_lon[i, j])
-            d_wink[i,j] = geodesic(list(ref_point.values()), point).km  # distance in km
-    
     cols = ['Name', 'Start time', 'End time']
     typhoons_selected = pd.DataFrame(columns=cols)
-    for i in range(len(wink_mdata)):
-        tp_name = wink_mdata.loc[i]['Name']
-        if tp_name not in btd_typhoons['Name'].values: continue
-    
-        tp_track = btd_typhoons[btd_typhoons['Name']==tp_name][['DateTime', 'center_lat', 'center_lon']]   
-        wind_tp_wink = read_typhoon_wink(dir_wink, f'{tp_name}_WIND.dat') # dictionary of ws, and wd in shape of (time, lat_points, lon_points)
-        tp_mdata = wink_mdata.loc[i]
+    #%% TYPHOON OCCURRED IN 1979-2000 USING WIND FIELD DATA FROM WINK
+    if dir_wink !='':
+        # compute distance between reference point to all the point in wink grid
+        d_wink = np.zeros((len(wink_lat_points), len(wink_lon_points)))
+        for i in range(len(wink_lat_points)):
+            for j in range( len(wink_lon_points)):
+                point = (wink_grid_lat[i,j], wink_grid_lon[i,j])
+                d_wink[i,j] = geodesic(list(ref_point.values()), point).km  # distance in km
 
-        # check track of typhoon whether it satisfied to be considered passing the study site 
-        tp_track['Distance_km'] = np.array([geodesic(list(ref_point.values()), (p_lat, p_lon)).km for (p_lat, p_lon) in zip(tp_track['center_lat'], tp_track['center_lon'])])
+        wink_mdata = read_typhoon_wink_metadata(dir_wink)
+
+        typhoons_selected = pd.DataFrame(columns=cols)
+        for i in range(len(wink_mdata)):
+            tp_name = wink_mdata.loc[i]['Name']
+            if tp_name not in btd_typhoons['Name'].values: continue
         
-        for ci in range(len(search_cri)):
-            if len(np.argwhere(tp_track['Distance_km']<search_cri['radius_km'][ci])) == 0: continue
-            passing_time = tp_track[tp_track['Distance_km']<search_cri['radius_km'][ci]]['DateTime'].to_list()
+            tp_track = btd_typhoons[btd_typhoons['Name']==tp_name][['DateTime', 'center_lat', 'center_lon']]   
+            wind_tp_wink = read_typhoon_wink(dir_wink, f'{tp_name}_WIND.dat') # dictionary of ws, and wd in shape of (time, lat_points, lon_points)
+            tp_mdata = wink_mdata.loc[i]
 
-            # get maximum wind speed during passing time, 'hours' set to 1 as interval in WINK is 60 minutes
-            start_time_idx = max(int((passing_time[0] - tp_mdata['Start time'])/pd.Timedelta(hours=1)), 0)
-            end_time_idx = min(int((passing_time[-1] - tp_mdata['Start time'])/pd.Timedelta(hours=1)), wind_tp_wink['ws'].shape[0])
+            # check track of typhoon whether it satisfied to be considered passing the study site 
+            tp_track['Distance_km'] = np.array([geodesic(list(ref_point.values()), (p_lat, p_lon)).km for (p_lat, p_lon) in zip(tp_track['center_lat'], tp_track['center_lon'])])
+            
+            for ci in range(len(search_cri)):
+                if len(np.argwhere(tp_track['Distance_km']<search_cri['radius_km'][ci])) == 0: continue
+                passing_time = tp_track[tp_track['Distance_km']<search_cri['radius_km'][ci]]['DateTime'].to_list()
+                if len(passing_time) == 0: continue
 
-            # extract wind speed of points in checking areas                  
-            radius_mask = (d_wink - search_cri['radius_km'][ci]) < 0
-            ws_masked = wind_tp_wink['ws'][start_time_idx:end_time_idx+1,:,:] * radius_mask
-            if ws_masked.max() > search_cri['min_ws'][ci]: 
-                start_time = tp_mdata['Start time'] + pd.Timedelta(hours=start_time_idx)
-                end_time = tp_mdata['Start time'] + pd.Timedelta(hours=end_time_idx)
-                typhoons_selected.loc[len(typhoons_selected)] = [tp_name, pd.to_datetime(start_time), pd.to_datetime(end_time)]
-            break
+                # get maximum wind speed during passing time, 'hours' set to 1 as interval in WINK is 60 minutes
+                start_time_idx = max(int((passing_time[0] - tp_mdata['Start time'])/pd.Timedelta(hours=wink_dt)), 0)
+                end_time_idx = min(int((passing_time[-1] - tp_mdata['Start time'])/pd.Timedelta(hours=wink_dt)), wind_tp_wink['ws'].shape[0])
 
-    if fname_save != '':
-        typhoons_selected.to_excel(fname_save, 'WINK')
+                # extract wind speed of points in checking areas                  
+                radius_mask = (d_wink - search_cri['radius_km'][ci]) < 0
+                ws_masked = wind_tp_wink['ws'][start_time_idx:end_time_idx+1,:,:] * radius_mask
+                if ws_masked.max() > search_cri['min_ws'][ci]: 
+                    start_time = tp_mdata['Start time'] + pd.Timedelta(hours=start_time_idx)
+                    end_time = tp_mdata['Start time'] + pd.Timedelta(hours=end_time_idx)
+                    typhoons_selected.loc[len(typhoons_selected)] = [tp_name, pd.to_datetime(start_time), pd.to_datetime(end_time)]
+                break
+
+        if fname_save != '':
+            typhoons_selected.to_excel(fname_save, 'WINK')
 
 
-    # TODO: choosing typhoon from jma_msm database
-    jma_msm_typhoons = read_typhoon_jma_msm()
+    #%% TYPHOON OCCURRED IN 2001 ONWARD USING JRA_3Q WIND FIELD
+    if dir_jra3q !='':
+        wink_areas = dict()
+        wink_areas['lat'] = wink_lat_range
+        wink_areas['lon'] = wink_lon_range
+        
+        # compute distance between reference point to all the point in jra3q grid
+        # reading example from 1-month data of any year to get information on grid and temporal
+        temp_jra = xr.open_dataset(dir_jra3q + 'jra3q.anl_surf.0_2_3.vgrd10m-hgt-an-gauss.2025030100_2025033118.nc')
+        lat_subset_jra = temp_jra.lat.sel(lat=slice(wink_areas['lat'][1], wink_areas['lat'][0])).values[::-1]
+        lon_subset_jra = temp_jra.lon.sel(lon=slice(wink_areas['lon'][0], wink_areas['lon'][1])).values
+        jra_grid_lat, jra_grid_lon = np.meshgrid(lat_subset_jra, lon_subset_jra, indexing='ij')
+
+        d_jra = np.zeros((len(lat_subset_jra), len(lon_subset_jra)))
+        for i in range(len(lat_subset_jra)):
+            for j in range( len(lon_subset_jra)):
+                point = (jra_grid_lat[i,j], jra_grid_lon[i,j])
+                d_jra[i,j] = geodesic(list(ref_point.values()), point).km  # distance in km
+
+        cols = ['Name', 'Start time', 'End time']
+        typhoons_selected = pd.DataFrame(columns=cols)
+
+        btd_typhoons = btd_typhoons[btd_typhoons['DateTime'] >= pd.to_datetime('2001-01-01')]
+        list_tps = btd_typhoons['Name'].unique()
+
+        for i in range(len(list_tps)):
+            tp_name = list_tps[i]
+            tp_track = btd_typhoons[btd_typhoons['Name']==tp_name][['DateTime', 'center_lat', 'center_lon']]   
+            wind_tp_jma = read_typhoon_jra3q(dir_jra3q, tp_name, btd_typhoons, wink_areas)
+            start_time = btd_typhoons[btd_typhoons['Name'] == tp_name]['DateTime'].iloc[0]
+            end_time = btd_typhoons[btd_typhoons['Name'] == tp_name]['DateTime'].iloc[-1]
+
+            # check track of typhoon whether it satisfied to be considered passing the study site 
+            tp_track['Distance_km'] = np.array([geodesic(list(ref_point.values()), (p_lat, p_lon)).km for (p_lat, p_lon) in zip(tp_track['center_lat'], tp_track['center_lon'])])
+            
+            for ci in range(len(search_cri)):
+                if len(np.argwhere(tp_track['Distance_km']<search_cri['radius_km'][ci])) == 0: continue
+                passing_time = tp_track[tp_track['Distance_km']<search_cri['radius_km'][ci]]['DateTime'].to_list()
+                if len(passing_time) == 0: continue
+
+                # get maximum wind speed during passing time, 'hours' set to interval of database
+                start_time_idx = max(int((passing_time[0] - start_time)/pd.Timedelta(hours=jra3q_dt)), 0)
+                end_time_idx = min(int((passing_time[-1] - start_time)/pd.Timedelta(hours=jra3q_dt)), wind_tp_jma['ws'].shape[0])
+
+                # extract wind speed of points in checking areas                  
+                radius_mask = (d_jra - search_cri['radius_km'][ci]) < 0
+                ws_masked = wind_tp_jma['ws'][start_time_idx:end_time_idx+1,:,:] * radius_mask
+                start_time_ = btd_typhoons[btd_typhoons['Name'] == tp_name]['DateTime'].iloc[0]
+                if ws_masked.max() > search_cri['min_ws'][ci]: 
+                    start_time_ = start_time + pd.Timedelta(hours=start_time_idx)
+                    end_time_ = start_time + pd.Timedelta(hours=end_time_idx)
+                    typhoons_selected.loc[len(typhoons_selected)] = [tp_name, pd.to_datetime(start_time_), pd.to_datetime(end_time_)]
+                break
+        
+        if fname_save != '':
+            typhoons_selected.to_excel(fname_save, 'JMA')
+
 
     # later dump to excel file
     return typhoons_selected
 
 
-def plot_typhoon_track_with_radii(tp_track, ref_point, radii, fig_title):
+def read_typhoon_jra3q(dir_tp, typhoon_name, btd_typhoons, inter_areas):
+    ''' Read u,v-componentat duration of specific typhoon 
+    Wind u,v-component at 10m height as monthly manner
+    Return wind speed and wind direction for specific typhoon
+
+    Parameters:
+        -dir_tp: str, directory to typhoon's wind u,v-component from 2001 to 2025
+        -typhoon_name: str, name of current typhoon with format in WINK, e.g., 2527_KOTO
+        -btd_typhoons: pd.DataFrame, dataframe of typhoons' information, from read_jma_btd()
+        -inter_areas: dictionary, range of lat, lon to small grid matching with WINK,read from metocean_metadata
+    Returns:
+        -current_typhoon: dictionary of wind speed and wind direction
+            ws: np.ndarray, wind speed of typhoon wind, in shape of (time, lat, lon)
+            wd: np.ndarray, wind direction of typhoon wind, in shape of (time, lat, lon)
+
+    '''  
+    # define year and month of currence of current typhoon from its name and time
+    year_prefix = int(typhoon_name[0:2])
+    if year_prefix > 51: year = int(f'19{year_prefix}')
+    elif year_prefix < 10: year = int(f'200{year_prefix}')
+    else: year = int(f'20{year_prefix}')
+    months = np.unique(btd_typhoons[btd_typhoons['Name'] == typhoon_name]['DateTime'].dt.month)
+    start_time = btd_typhoons[btd_typhoons['Name'] == typhoon_name]['DateTime'].iloc[0]
+    end_time = btd_typhoons[btd_typhoons['Name'] == typhoon_name]['DateTime'].iloc[-1]
+
+    ws = []
+    wd = []
+
+    # load u,v-component of wind during 
+    for month in months:
+        if month<10:
+            u_search_str = f'ugrd10m-hgt-an-gauss.{year}0{month}'
+            v_search_str = f'vgrd10m-hgt-an-gauss.{year}0{month}'
+        else:
+            u_search_str = f'ugrd10m-hgt-an-gauss.{year}{month}'
+            v_search_str = f'vgrd10m-hgt-an-gauss.{year}{month}'      
+        u_file = glob.glob(dir_tp + f'*{u_search_str}*', recursive=False)
+        v_file = glob.glob(dir_tp + f'*{v_search_str}*', recursive=False)
+
+        u_temp = xr.load_dataset(u_file[0])
+        v_temp = xr.load_dataset(v_file[0])
+        
+        u_temp = u_temp.sel(time=slice(start_time, end_time),
+                            lat=slice(inter_areas['lat'][1],inter_areas['lat'][0]), 
+                            lon=slice(inter_areas['lon'][0],inter_areas['lon'][1]))
+        
+        v_temp = v_temp.sel(time=slice(start_time, end_time),
+                            lat=slice(inter_areas['lat'][1],inter_areas['lat'][0]), 
+                            lon=slice(inter_areas['lon'][0],inter_areas['lon'][1]))
+
+        ws_temp, wd_temp = compute_ws_wd_from_u_v(u_temp['ugrd10m-hgt-an-gauss'].values, 
+                                        v_temp['vgrd10m-hgt-an-gauss'].values)
+        ws.append(ws_temp)
+        wd.append(wd_temp)
+        
+    current_typhoon = dict({'ws':np.concatenate(ws, axis=0), 'wd':np.concatenate(wd, axis=0)})
+
+    return current_typhoon
+
+
+def read_typhoon_wink(dir_tp, typhoon_name, plot_=False):
+    '''
+    Read information about specific typhoon wind data from WINK for whole grid provided by WINK
+    Parameters:
+        -dir_tp: str, folder storing WINK wind data field
+        -typhoon_name: str, name of typhoon, in format of Code_Name, e.g., 5609_BABS
+
+    Returns:
+        -current_typhoon: dictionary of wind speed and wind direction
+            ws: np.ndarray, wind speed of typhoon wind, in shape of (time, lat, lon)
+            wd: np.ndarray, wind direction of typhoon wind, in shape of (time, lat, lon)
+
+    '''
+    # metadata = read_typhoon_wink_metadata(dir_tp)
+    data = np.loadtxt(dir_tp+typhoon_name)
+    wind_grid = np.reshape(data, (-1,2, 901, 901))
+    
+    # compute wind speed, wind direction
+    u_comp = wind_grid[:,0,:,:]
+    v_comp = wind_grid[:,1,:,:]
+    ws, wd = compute_ws_wd_from_u_v(u_comp, v_comp)
+
+    current_typhoon = dict({'ws':ws, 'wd':wd})
+    if plot_:
+        lon_start, lat_start = 117.0, 20.0
+        res = 0.03333333
+        size = 901
+        plot_typhoon_windfield(u_comp[0,:,:], v_comp[0,:,:], lon_start, lat_start, res, size, typhoon_name + 'first hours tracked')
+
+    return current_typhoon
+
+def plot_typhoon_track_with_radii(tp_track, ref_point, radii_cri, fig_title, dir_save, 
+                                  tp_wind=None, wind_grid=None):
     ''' Plot roughly track of typhoon along with different areas accoridng to radii of 2.5, 3, 5 degree from the reference point
     Areas within radius is plot with Circle patch, which is not correctly in geographic distance, only use for rough visualization purpose
     Parameters:
@@ -137,6 +307,15 @@ def plot_typhoon_track_with_radii(tp_track, ref_point, radii, fig_title):
     Returns:
         - only show figure
     '''
+    
+    temp_dist = [geodesic(list(ref_point.values()), [tp['center_lat'], tp['center_lon']]).km  for _, tp in tp_track.iterrows()]
+    if wind_grid=='jra_3q':
+        wind_grid_lat = jra_grid_lat
+        wind_grid_lon = jra_grid_lon
+    elif wind_grid=='wink':
+        wind_grid_lat = wink_grid_lat
+        wind_grid_lon = wink_grid_lon
+         
     # Plotting with Cartopy
     fig = plt.figure(figsize=(12, 10))
     ax = plt.axes(projection=ccrs.PlateCarree())
@@ -146,21 +325,39 @@ def plot_typhoon_track_with_radii(tp_track, ref_point, radii, fig_title):
     ax.add_feature(cfeature.COASTLINE, linewidth=1)
     ax.add_feature(cfeature.BORDERS, linestyle=':')
     ax.add_feature(cfeature.LAND, facecolor='lightgray', alpha=0.3)
-
     ax.plot(tp_track['center_lon'].values, tp_track['center_lat'].values,
             marker='o', markerfacecolor='none', markersize=3, linewidth=1, label='Typhon track')
-    
     ax.scatter(ref_point['lon'], ref_point['lat'], marker='o', color='red', s=3, label='Reference point')
+
+    # add wind speed and date time, 0 and 12UTC, information if typhoon track come near study site at either determined radii
     radii_alpha = [0.05, 0.08, 0.1]
-    for i in range(len(radii)):
-        circ = mpatches.Circle((ref_point['lon'], ref_point['lat']), radii[i], 
+    radii_deg = list(radii_cri['radius_deg'].values)
+    radii_km = list(radii_cri['radius_km'].values)
+
+    for i in range(len(temp_dist)):
+        if temp_dist[i] > max(radii_km):continue
+        if tp_track['DateTime'].iloc[i].hour in [0, 12]:
+            month_str = tp_track['DateTime'].iloc[i].date().strftime('%B')[0:3]
+            day_str = tp_track['DateTime'].iloc[i].date().day
+            ax.annotate(f'{day_str} {month_str} ( {tp_track["DateTime"].iloc[i].hour}UTC)',
+                        (tp_track['center_lon'].values[i], tp_track['center_lat'].values[i]))
+            
+        # plot wind field if there is data
+        if tp_wind is not None:
+            btd_typhoons = read_jma_btd(dir_btd)
+
+
+    for i in range(len(radii_deg)):
+        circ = mpatches.Circle((ref_point['lon'], ref_point['lat']), radii_deg[i], 
                             edgecolor='red', fc='m', alpha=radii_alpha[i],)
         ax.add_patch(circ)
+
+
     ax.grid(color='gray')
     ax.legend()
     ax.set_title(fig_title)
+    if dir_save != '': plt.savefig(dir_save+fig_title)
     plt.show()
-
 
 
 def read_jma_btd(dir_btd):
@@ -215,99 +412,20 @@ def knot2ms(ws_knot):
     '''
     return ws_knot/2
 
-#TODO
-def read_typhoon_jma_msm(dir_tp):
-    ''' Read information about typhoon wind data from JMA-MSM
-    Wind u,v-component at 10m height as monthly manner
 
-
-    Parameters:
-        -dir_tp: str, directory to typhoon's wind u,v-component from 2001 to 2025
-    Returns:
+def compute_u_v_from_ws_wd(ws, wd):
+    ''' Convert observation data of wind speed and direction to u, v component 
+        Parameters:
+            -ws: np.ndarray, wind speed data
+            -wd: np.ndarray, wind direction data, in degree
+        Returns:
+            -u_comp: np.ndarray, wind u component
+            -v_comp: np.ndarray, wind v component
     '''
-    year = 2021
-    month = 1
-    fname = 'jra3q.anl_surf.0_2_3.vgrd10m-hgt-an-gauss.2026040100_2026043018.nc'
-    u_temp = xr.load_dataset(dir_tp + fname)
-    return None
-
-def read_typhoon_wink_metadata(dir_tp):
-    ''' Read metadata from WINK typhoon data
-    Parameters:
-        -dir_tp: str, directory to typhoon wind data from WINK
-    Returns:
-        -typhoons: pd.DataFrame, with 4 columns of [Name, Start time, End time, Time inteval(min)]
-    '''
-    mdata_typhoon =  pd.read_csv(dir_tp+'HYB_TC_INPUTS.dat', sep='./', header=None)
-    typhoons = mdata_typhoon.iloc[:,1].dropna()
-    typhoons = typhoons.apply(lambda x: x.split('_BATCH')[0])
-    typhoons = typhoons.to_frame(name='Name')
-    typhoons['Start time'] = None
-    typhoons['End time'] = None
-    typhoons['Time iterval (min)'] = None
-
-    for i in typhoons.index:
-        time_info = mdata_typhoon.iloc[i+2,0].split(' ')
-        start_d = f'{time_info[1][:4]}-{time_info[1][4:6]}-{time_info[1][6:8]}'
-        start_h = f'{time_info[1][9:11]}:{time_info[1][11:13]}:{time_info[1][13:15]}'
-        typhoons.at[i, 'Start time'] = pd.to_datetime(f'{start_d} {start_h}')
-        end_d = f'{time_info[-1][:4]}-{time_info[-1][4:6]}-{time_info[-1][6:8]}'
-        end_h = f'{time_info[-1][9:11]}:{time_info[-1][11:13]}:{time_info[-1][13:15]}'
-        typhoons.at[i, 'End time'] = pd.to_datetime(f'{end_d} {end_h}')
-        typhoons.at[i, 'Time iterval (min)'] = 60
+    u = -ws * np.sin(np.radians(ws)) 
+    v = -ws * np.cos(np.radians(wd))  
+    return u, v
     
-    return typhoons.reset_index(drop=True)
-    
-def read_typhoon_wink(dir_tp, typhoon_name, plot_=False):
-    '''
-    Read information about typhoon wind data from WINK for whole grid provided by WINK
-    Parameters:
-        -dir_tp: str, folder storing WINK wind data field
-        -typhoon_name: str, name of typhoon, in format of Code_Name, e.g., 5609_BABS
-
-    Returns:
-        -ws: np.ndarray, wind speed of typhoon wind, in shape of (time, lat, lon)
-        -wd: np.ndarray, wind direction of typhoon wind, in shape of (time, lat, lon)
-
-    '''
-    metadata = read_typhoon_wink_metadata(dir_tp)
-    data = np.loadtxt(dir_tp+typhoon_name)
-    wind_grid = np.reshape(data, (-1,2, 901, 901))
-    
-    # compute wind speed, wind direction
-    u_comp = wind_grid[:,0,:,:]
-    v_comp = wind_grid[:,1,:,:]
-    ws, wd = compute_ws_wd_from_u_v(u_comp, v_comp)
-
-    current_typhoon = dict({'ws':ws, 'wd':wd})
-    if plot_:
-        lon_start, lat_start = 117.0, 20.0
-        res = 0.03333333
-        size = 901
-        plot_typhoon_windfield(u_comp[0,:,:], v_comp[0,:,:], lon_start, lat_start, res, size, typhoon_name + 'first hours tracked')
-
-    return current_typhoon
-
-def read_typhoon_specific_loc(ws, wd, wind_grid, loc):
-    '''
-    Return wind speed, wind direction of typhoon for specific location with all occurrence time
-    Paramters:
-        -ws: np.ndarray, dim of (time, lat space, lon space), wind speed of typhoon
-        -wd: np.ndarray, dim of (time, lat space, lon space), wind direction of typhoon
-        -wind_grid: dict, contain points for lat and lon 
-            'lat': np.array of latitiude in grid
-            'lon': np.arrau of longitude in grid 
-        -loc: list, [lat, lon] of location.
-            
-    Returns:
-        -ws: np.array, dim of (time, 1), wind speed of typhoon for specific location
-        -wd: np.array, dim of (time, 1), wind direction of typhoon for specific location
-        
-    '''
-    lat_idx = np.where(wind_grid['lat'] == min(wind_grid['lat'], key=lambda x: abs(x-loc['lat'])))
-    lon_idx = min(wind_grid['lon'], key=lambda x: abs(x-loc['lon']))
-
-    return ws[:,lat_idx,lon_idx ], wd[:,lat_idx,lon_idx]
 
 def compute_ws_wd_from_u_v(u, v):
     '''
@@ -323,7 +441,8 @@ def compute_ws_wd_from_u_v(u, v):
         -wind_direction: np.array data
     '''
     wind_speed = np.sqrt(np.power(u, 2) + np.power(v, 2))
-    wind_direction = 180 + (180/math.pi) * np.atan2(u, v)
+    # wind_direction = 180 + (180/math.pi) * np.atan2(u, v)
+    wind_direction = (180 + np.degrees(np.arctan2(u, v))) % 360
 
     return wind_speed, wind_direction
 
@@ -331,7 +450,6 @@ def compute_ws_wd_from_u_v(u, v):
 # Jan 26, 2026
 # Refer to DHI report for Wando-Gumil:
 # measurements (60mMSL) were converted to 10mMSL using a power wind profile and a shear factor of 0.11.
-# Check if data were measured at what heights. For exampple, 10m, 50m mMSL
 def wind_speed_to_10m_power_law(U_z, z, z_ref=10, a=0.11):
     '''
     Convert wind averaging at certain vertical level(height, e.g., 100 m) to certain vertical level (e.g., 10 m)
@@ -351,8 +469,14 @@ def wind_speed_to_10m_power_law(U_z, z, z_ref=10, a=0.11):
 
     return np.multiply(U_z, np.power(z_ref/z, a))
 
+#May 21, 2206. Logarithm law of wind conversion between heights
+def wind_speed_to_10m_log(ws, z0, wind_height):
+    '''
+    '''
+    wind_10m = ws * ((math.log(10 / z0))/(math.log(wind_height / z0)))
+    return wind_10m
 
-def quality_control(wind_data, fixed_qc_criteria, data_interval, station, provider, checking_year, logger):
+def wind_quality_control(wind_data, fixed_qc_criteria, data_interval, station, provider, checking_year, logger):
     '''
     QC procedure
     Skip period when there is no change in wind speed for 5 hours in consecutive 
@@ -396,3 +520,4 @@ def quality_control(wind_data, fixed_qc_criteria, data_interval, station, provid
     wind_data = wind_data.reset_index()
 
     return wind_data
+# %%

@@ -8,7 +8,21 @@ Mapping variables's long name to short name according to Nomenclature in DHI-Wan
 
 import numpy as np
 import pandas as pd
+import xarray as xr
 
+
+# path anf filename definition here
+dir_data = 'D:\\InProbation\\Metocean\\Data\\'
+dir_analysis = 'D:\\InProbation\\Metocean\\Analysis\\'
+dir_tp_jra3q = dir_data + 'Typhoon_wind\\JRA_3Q\\'
+dir_tp_wink = dir_data + 'Typhoon_wind\\Reanalyzed_HYB_TC_Wind_Data\\'
+dir_btd = dir_data + 'Typhoon_wind\\JMA_BestTrackData\\'
+dir_tp_selected = dir_data + 'Typhoon_wind\\typhoons_selected\\'
+dir_tp_track_graphic = dir_tp_selected + '\\track_graphic\\'
+dir_era5_wind = dir_data + 'ERA5\\'
+dir_turbine_info = dir_data + 'Turbine design\\'
+
+#%% Tidal harmonic analysis
 # "Z0" should be added also 
 # extracted from Annual report 2025 of KHOA
 khoa_tidal_consts = [
@@ -38,6 +52,7 @@ utide_tidal_consts =  ['Z0','SA','SSA','MSM','MM','MSF','MF','ALP1','2Q1','SIG1'
                         'ST20','ST21','3MS8','3MK8','ST22','ST23','ST24','ST25','ST26','4MK9','ST27','ST28','M10',
                         'ST29','ST30','ST31','ST32','ST33','M12','ST34','ST35']
 
+#%% Wind analysis
 # refer to picture in file '02. 도의회 보완 1차_21년 10월' in email, [WindS5500/140 Technical Specification]
 # from DooSan Heavy Industries and Construction, Co., Ltd
 tubrine_hub_height = 100
@@ -55,27 +70,38 @@ typhoon_search_cri_dhi = pd.DataFrame(data=[ [5, 500, 30], [3, 300, 25], [2.5, 2
 # reference point for choosing typhoon with different radii criteria above
 typhoon_ref_point = dict({'lat':33.5, 'lon':126.75}) # chosen near PC1, PC2; might change accordingly
 
-# path anf filename definition here
-dir_data = 'D:\\InProbation\\Metocean\\Data\\'
-dir_analysis = 'D:\\InProbation\\Metocean\\Analysis\\'
 
 data_sources = ['KMA', 'KHOA', 'WINK']
 
 # WINK typhoon grid info; April 24, 2026
+wink_lon_range = [117, 147]
+wink_lat_range = [20, 50]
+
 wink_n_points = 901
 wink_res_deg = 0.03333333
 
-wink_lon_points = np.linspace(117, 147, wink_n_points)
-wink_lat_points = np.linspace(20, 50, wink_n_points)
-wink_grid_lat, wink_grid_lon = np.meshgrid(wink_lat_points, wink_lon_points)
+# wink_lon_points = np.linspace(wink_lon_range[0], wink_lon_range[1], wink_n_points, endpoint=False)
+# wink_lat_points = np.linspace(wink_lat_range[0], wink_lat_range[1], wink_n_points, endpoint=False)
+
+# to match with interpolated grid of ERA5 and JRA3Q using cdo
+wink_lon_points = np.arange(wink_lon_range[0], wink_lon_range[1], wink_res_deg)
+wink_lat_points = np.arange(wink_lat_range[0], wink_lat_range[1], wink_res_deg)
+
+wink_grid_lat, wink_grid_lon = np.meshgrid(wink_lat_points, wink_lon_points, indexing='ij')
+
+wink_dt = 1 # wink record wind at 1hr inteval
+jra3q_dt = 6 # jra-3q record wind at 1hr inteval
 
 # study site coordination, lon/lon
 PC1_loc = dict({'lat':33.54219444, 'lon':126.84852780})
 PC2_loc = dict({'lat':33.55400000, 'lon':126.85891670})
 
+temp_jra = xr.open_dataset(dir_tp_jra3q + 'jra3q.anl_surf.0_2_3.vgrd10m-hgt-an-gauss.2025030100_2025033118.nc')
+lat_subset_jra = temp_jra.lat.sel(lat=slice(wink_lat_range[1], wink_lat_range[0])).values[::-1]
+lon_subset_jra = temp_jra.lon.sel(lon=slice(wink_lon_range[0], wink_lon_range[1])).values
+jra_grid_lat, jra_grid_lon = np.meshgrid(lat_subset_jra, lon_subset_jra, indexing='ij')
 
-
-#% Rose plot colormap
+#%% Rose plot colormap
 windrose_colors_1 = ['#BD2102', '#EE5611', '#FF8849', '#FDAF45', '#FFD642', '#7BC64D',  
               '#A0D5E3', '#0B93D7', '#4F71BA', '#93509E', '#FFFFFF']
 windrose_colors_1 = windrose_colors_1[::-1]
@@ -84,18 +110,17 @@ windrose_colors_2 = ['#101010', '#3C3C3C', '#525252', '#686868', '#7E7E7E', '#93
                       '#A9A9A9', '#BFBFBF', '#D5D5D5', '#EBEBEB', '#FFFFFF']
 windrose_colors_2 = windrose_colors_2[::-1]
 
-# control parameters needed to read from ADCIRC (fort.15), April 30, 2026
+#%% Modeled data
+#  control parameters needed to read from ADCIRC (fort.15), April 30, 2026
 # need to add specific parameters for checking.e.g, 'ELEV': water elevation
 # IF PARAMETERS UPATED HERE, THEN IT SHOULD BE UPDATED IN read_adcirc_params() ACCORDINGLY
 # PARAMETERS STATED HERE IS JUST PLACE HOLDER FOR DOUBLE CHECK WHAT SHOULD BE LOAD IN read_adcirc_params()
 adcirc_control_params_head = ['DT', 'RNDAY'] # shoule be read in order
 adcirc_control_params_tail = ['NSPOOLE']
 
-# origmesh_site_bathymetry_v1
-modeled_all_vars = ['Time', 'Hsig', 'Dir', 'Tm_10', 'RTpeak', 'Tm01', 'Tm02', 'Depth', 'Watlev', 'X-Vel', 'Y-Vel', 'X-Windv', 'Y-Windv', 'PkDir', 'Dspr']
-modeled_vars_type = ['string', 'float', 'float', 'float', 'float', 'float', 'float', 'float', 'float', 'float', 'float', 'float', 'float', 'float', 'float']
 
 
+#%% Observation data metadata
 # later put in station_metadata file and load as batch
 ws_name = '풍속(m/s)' # same for KMA and KHOA
 wd_name = '풍향(deg)' # same for KMA and KHOA

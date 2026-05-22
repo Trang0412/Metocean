@@ -44,22 +44,28 @@ from wind_data_processing import *
 #%%
 dir_modeled_data = dir_data + 'Modeled\\'
 dir_obs_data = dir_data + 'Observations\\'
-modeled_data_name = 'refined_mesh\\simulation_20260422\\'
-
+modeled_data_name = 'simulation_July2023\\'
+year = 2023
 
 dir_fig_save = dir_analysis + 'Obs_Modeled\\Wave\\' + modeled_data_name
 if not os.path.exists(dir_fig_save):
     os.makedirs(dir_fig_save)
 
 
+# origmesh_site_bathymetry_v1
+modeled_all_vars = ['Time', 'Hsig', 'Dir', 'Tm_10', 'RTpeak', 'Tm01', 'Tm02', 'Depth', 'Watlev', 'X-Vel', 'Y-Vel', 'X-Windv', 'Y-Windv', 'PkDir', 'Dspr']
+modeled_vars_type = ['string', 'float', 'float', 'float', 'float', 'float', 'float', 'float', 'float', 'float', 'float', 'float', 'float', 'float', 'float']
+
+
 model_locs = {'Buoy1': '구엄', 'Buoy2': '우도', 'Buoy3': '하도', 'Buoy4': '김녕'}  # all from KMA
 wave_period_var = 'Tm_10'
+wl_var = 'Watlev'
 
 subfolders = [x for x in Path(dir_modeled_data+modeled_data_name).iterdir() if x.is_dir()]
 
-#%%
-# load modeled data
+#%% load modeled data
 for checking_loc in model_locs:
+    if checking_loc=='Buoy1': continue # May 21, skip Guom for now
 
     modeled_data = pd.DataFrame(columns=modeled_all_vars)
 
@@ -90,13 +96,15 @@ for checking_loc in model_locs:
         obs_data = pd.read_csv(dir_obs_data + 'KMA\\구엄\\OBS_CWBUOY_TIM_20260330112010.csv', sep=',', header=0, encoding='cp949')
 
     else:
-        obs_data = load_obs_all_data(dir_obs_data, 'KMA', model_locs[checking_loc], 2025)
+        obs_data = load_obs_all_data(dir_obs_data, 'KMA', model_locs[checking_loc], year)
 
     if '파향(deg)' in obs_data.columns:
         # vars_to_check = ['Time', 'Hsig', 'Tm_10', 'Dir']
         vars_to_check = ['Time', 'Hsig', wave_period_var, 'Dir']
         vars_type=['datetime64[ns]', 'float', 'float', 'float']
         wave_params = [kma_timestamp, '유의파고(m)', '파주기(sec)', '파향(deg)']
+
+        water_params = [kma_timestamp, ]
     else:
         vars_to_check = ['Time', 'Hsig', wave_period_var]
         vars_type=['datetime64[ns]', 'float', 'float']
@@ -121,7 +129,7 @@ for checking_loc in model_locs:
 
         ####################################################################################
         # Comparison between Observation with Modeled data 
-        # correct to 9h head
+        # correct to KST time, 9h head
         modeled_wave[kma_timestamp] = pd.DatetimeIndex(modeled_wave[kma_timestamp]) + timedelta(hours=deltat)
         df_wave_combine = pd.merge(obs_wave_1hr, modeled_wave, on=kma_timestamp, how='right', suffixes=['_obs', '_modeled'])
 
@@ -138,10 +146,10 @@ for checking_loc in model_locs:
             plot_time_series_2vars(df_wave_combine[[kma_timestamp, param_checking+'_obs', param_checking+'_modeled']],
                                     'Observation', 'Modeled', [9, 4], fig_title, dir_fig_save + '\\'+ fname_save,
                                     fc1='#F67A0D', fc2='#3C88BD', plot_type='MIT', lstyle1 = '-', lstyle2='--',
-                                    ylabel_text=ylabel_text, xtick_rotation=0)
-            scatter_plot_ERA5_against_meas(df_wave_combine[[kma_timestamp, param_checking+'_obs', param_checking+'_modeled']], 
-                                           [9,6], [0, np.max([10, df_wave_combine.iloc[:,1].max()+5, df_wave_combine.iloc[:,2].max()+5])], 
-                                           bin_width=0.1, x_tick=1, fig_title=fig_title, fname_save = dir_fig_save + '\\'+ fname_save+'_scatter')
+                                    ylabel_text=ylabel_text, xtick_rotation=45)
+            # scatter_plot_ERA5_against_meas(df_wave_combine[[kma_timestamp, param_checking+'_obs', param_checking+'_modeled']], 
+            #                                [9,6], [0, np.max([10, df_wave_combine.iloc[:,1].max()+5, df_wave_combine.iloc[:,2].max()+5])], 
+            #                                bin_width=0.1, x_tick=1, fig_title=fig_title, fname_save = dir_fig_save + '\\'+ fname_save+'_scatter')
 
         del modeled_wave
 

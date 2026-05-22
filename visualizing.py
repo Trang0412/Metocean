@@ -39,8 +39,10 @@ import numpy as np
 import xarray as xr
 import plotly
 from plotly.subplots import make_subplots
-
-
+from matplotlib.ticker import AutoMinorLocator
+import matplotlib.ticker as mticker
+from matplotlib.lines import Line2D
+from cartopy.mpl.ticker import LongitudeFormatter, LatitudeFormatter
 
 from metocean_metadata import *
 from common_processing import *
@@ -58,6 +60,67 @@ from matplotlib.ticker import PercentFormatter
 import plotly.graph_objects as go
 
 #%%
+def draw_grid(bounding_area, ax, res, color, lw, alpha, linestyle):
+
+    lons = np.arange(120, 140, res)
+    lats = np.arange(31, 35, res)
+
+    # Vertical lines
+    for lon in lons:
+        ax.plot([lon, lon],[bounding_area['lat'][0], bounding_area['lat'][1]],
+                transform=ccrs.PlateCarree(), color=color,linewidth=lw,
+                alpha=alpha,linestyle=linestyle,zorder=1)
+
+    # Horizontal lines
+    for lat in lats:
+        ax.plot([bounding_area['lon'][0], bounding_area['lon'][1]],[lat, lat],
+                transform=ccrs.PlateCarree(),color=color,linewidth=lw,
+                alpha=alpha,linestyle=linestyle,zorder=1)
+
+def plot_tubine_locs_wind_grids(bounding_area, turbine_locs, grids_res = {'jra3q':0.375, 'era5':0.25, 'wink':0.033}):
+    
+    bounding_area = {'lat': [33, 34], 'lon':[126, 127]}
+
+    fig = plt.figure(figsize=(12, 8))
+    ax = plt.axes(projection=ccrs.PlateCarree())
+
+    # Set map extent
+    ax.set_extent([
+        bounding_area['lon'][0], bounding_area['lon'][1],
+        bounding_area['lat'][0], bounding_area['lat'][1]
+    ], crs=ccrs.PlateCarree())
+    # Coastline
+    coast = cfeature.GSHHSFeature(scale='full')
+    ax.add_feature(coast)
+
+    # Turbine locations
+    ax.scatter(turbine_locs['lon'],turbine_locs['lat'],c='red',s=2,zorder=10, label='Turbine')
+
+    draw_grid(bounding_area, ax, grids_res['jra3q'], color='gray', lw=1.5, alpha=0.8, linestyle='--')
+    draw_grid(bounding_area, ax, grids_res['era5'], color='blue', lw=1, alpha=0.6, linestyle='-')
+    draw_grid(bounding_area, ax, grids_res['wink'], color='green', lw=0.5,alpha=0.3, linestyle='-')
+    ax.set_xlabel("Longitude")
+    ax.set_ylabel("Latitude")
+
+    legend_elements = [Line2D([0], [0], color='gray', lw=1.5, ls='--',label='JRA-3Q'),
+                       Line2D([0], [0], color='blue', lw=1.5, ls='-',label='ERA5'),
+                       Line2D([0], [0], color='green', lw=1.5, label='WINK'),
+                       Line2D([0], [0],marker='o',color='w',markerfacecolor='red',markersize=5,label='Turbines')]
+    ax.legend(handles=legend_elements,loc='upper right',frameon=True)
+
+    # Tick locations
+    ax.set_xticks(np.arange(bounding_area['lon'][0], bounding_area['lon'][1], 0.1), crs=ccrs.PlateCarree())
+    ax.set_yticks(np.arange(bounding_area['lat'][0], bounding_area['lat'][1], 0.1), crs=ccrs.PlateCarree())
+
+    # Tick labels format
+    # lon_formatter = ccrs.PlateCarree()._as_mpl_transform(ax)
+    ax.xaxis.set_major_formatter(mticker.FormatStrFormatter('%.2f'))
+    ax.yaxis.set_major_formatter(mticker.FormatStrFormatter('%.2f'))
+    ax.tick_params(axis='both', labelsize=10)
+    plt.tight_layout()
+    plt.show()
+
+
 def plot_typhoon_windfield(u, v, lon_start, lat_start, res, size, fig_title):
     ''' Plot wind field (u,v) for typhoon at specific time on grid
     Parameters: 
@@ -111,7 +174,6 @@ def plot_typhoon_windfield(u, v, lon_start, lat_start, res, size, fig_title):
     plt.show()
 
 
-
 def plot_tidal_timeseries_harmonic(wl_all, coefs, fig_title, fname_save):
     '''Plot Time series of water level for Total, Tide and Residual components from Harmonic analysis 
     using UTide python-based package
@@ -140,7 +202,6 @@ def plot_tidal_timeseries_harmonic(wl_all, coefs, fig_title, fname_save):
     k1_idx = np.argwhere(coefs['name']=='K1').ravel()[0]
     o1_idx = np.argwhere(coefs['name']=='O1').ravel()[0]
     
-    
     mhws = msl + (coefs['A'][m2_idx] + coefs['A'][s2_idx])
     mhwn = msl + abs(coefs['A'][m2_idx] - coefs['A'][s2_idx])
 
@@ -148,7 +209,6 @@ def plot_tidal_timeseries_harmonic(wl_all, coefs, fig_title, fname_save):
     mlwn = msl - abs(coefs['A'][m2_idx] - coefs['A'][s2_idx])
 
     f_min = min(coefs['aux']['frq'])/(2*math.pi)
-
 
     # compute form factor, as DHI report 'Type'
     ff_num = coefs['A'][k1_idx]+coefs['A'][o1_idx]
@@ -278,7 +338,19 @@ def dual_rose_plot(data1, data2, lg_title1='', lg_title2='',
     ''' Dual rose plot to compare 2 data, e.g., measurement and ERA5
     
     Parameters:
+        -data_1: pd.DataFrame, 3 columns of [time, wind speed, wind direction]
+        -data_2: pd.DataFrame, 3 columns of [time, wind speed, wind direction]
+        -lg_title1: str, title for legend group 1; e.g, 'Measurement'
+        -lg_title2: str, title for legend group 2; e.g., 'ERA5'
+        -fig_title: str, figure title
+        -fname_save: str, file name to save
+        -speed_step: integer, bin width of speed data
+        -dir_step: integer, bin width of directional data
+        -calm_limit: integer, calm level of speed data, e.g. 2 or 4 for wind
+        -max_level: integer, maximum quantized label for color bar
+
     Returns:
+        None, show or save plot
     '''
     hole_r = 0.15 # radius of hole in middle center of the plot for Calm condition
     line_color = '#5D6166'
@@ -393,39 +465,16 @@ def dual_rose_plot(data1, data2, lg_title1='', lg_title2='',
     fig.update_layout(
         template=None,
         annotations=[
-            dict(
-                x=0.5,
-                y=0.5,
-                text='Calm',
-                showarrow=False,
-                font=dict(size=13, color="black"),
-                xref="paper",
-                yref="paper",
-                xanchor="center",
-                yanchor="middle"
-            ),
-
+            dict(x=0.5,y=0.5,text='Calm',showarrow=False,font=dict(size=13, color="black"),
+                xref="paper",yref="paper",xanchor="center",yanchor="middle"),
         ],
         title=dict(text=fig_title),
-        font_size=13,
-        legend_font_size=13,
-        legend_font_color='#000000',
-        polar_radialaxis_ticksuffix='%',
-        polar_angularaxis_rotation=90,
+        font_size=13,legend_font_size=13,legend_font_color='#000000',
+        polar_radialaxis_ticksuffix='%',polar_angularaxis_rotation=90,
         polar_angularaxis_direction='clockwise',
         # legend_traceorder="reversed",
-        legend1=dict(
-            xanchor='right',
-            x=1.1,
-            y=0.5,
-            traceorder="reversed",
-        ),
-        legend2=dict(
-            xanchor='left',
-            x=-0.1,
-            y=0.5,
-            traceorder="reversed",
-        )
+        legend1=dict(xanchor='right',x=1.1,y=0.5,traceorder="reversed",),
+        legend2=dict(xanchor='left',x=-0.1,y=0.5,traceorder="reversed",)
     )   
 
     fig.update_polars(
@@ -433,32 +482,18 @@ def dual_rose_plot(data1, data2, lg_title1='', lg_title2='',
         radialaxis=dict(
             # range=[0, max(np.ceil(max(ratio_each_dir1[1:-1])*100/5)*5, 20)],
             range=[0, max(np.ceil(max(max(ratio_each_dir1[1:-1]),max(ratio_each_dir2[1:-1]))*100/5)*5, 20)],
-            dtick=5,
-            tick0=5,
-            gridcolor=line_color,
-            linecolor=None,
-            autotickangles=[0, 45, 90,],
-            layer='below traces',
-            tickfont_size = 13,
-            categoryorder="total ascending",
-            linewidth=0,
-            ticklen=0,
-        ),
-        angularaxis=dict(
-            tickmode='array',
-            tickvals=[0, 90, 180, 270],
+            dtick=5,tick0=5,gridcolor=line_color,linecolor=None,autotickangles=[0, 45, 90,],
+            layer='below traces',tickfont_size = 13,categoryorder="total ascending",linewidth=0,ticklen=0,),
+        angularaxis=dict(tickmode='array',tickvals=[0, 90, 180, 270],
             ticktext=['North', 'East', 'South', 'West'],
-            tickcolor=None,
-            ticklen=0,
-            tickfont_color=None,
-        )
+            tickcolor=None,ticklen=0,tickfont_color=None,)
         )
     # fig.show()
     if fname_save != '':
         fig.write_image(fname_save, format="png")
 
 
-def rose_plot(data, speed_name='풍속(m/s)', dir_name='풍향(deg)', fig_title='', fname_save='', speed_step=2,
+def rose_plot(data, lg_title='', speed_name='풍속(m/s)', dir_name='풍향(deg)', fig_title='', fname_save='', speed_step=2,
                     dir_step=30, calm_limit=2, max_val=22):
     '''
     Rose plot for wind direction and wind_speed
@@ -522,32 +557,19 @@ def rose_plot(data, speed_name='풍속(m/s)', dir_name='풍향(deg)', fig_title=
         range_radialaxis[ti] = sum(r)
 
         fig.add_trace(go.Barpolar(
-            r = r,
-            name = trace_names[ti],
-            marker=dict(
-                color=windrose_colors_1[ti],
-                line=dict(color=line_color, width=1)
-            )  
-        ))
+            r = r,name = trace_names[ti],
+            legend='legend1',
+            legendgroup='g1',
+            legendgrouptitle={'text':lg_title},
+            marker=dict(color=windrose_colors_1[ti],line=dict(color=line_color, width=1))))
 
     fig.update_layout(
         template=None,
-        annotations=[
-            dict(
-                x=0.5,
-                y=0.5,
-                text='Calm',
-                showarrow=False,
-                font=dict(size=13, color="black"),
-                xref="paper",
-                yref="paper",
-                xanchor="center",
-                yanchor="middle"
-            ),
-
-        ],
+        annotations=[dict(x=0.5,y=0.5,text='Calm',showarrow=False,font=dict(size=13, color="black"),
+                xref="paper",yref="paper",xanchor="center",yanchor="middle"),],
         title=dict(text=fig_title),
         font_size=13,
+        legend1=dict(xanchor='right',x=1.2,y=0.5,traceorder="reversed",),
         legend_font_size=13,
         legend_font_color='#000000',
         polar_radialaxis_ticksuffix='%',
@@ -607,7 +629,6 @@ def plot_nearest_point_era5_regrid_era5(bounding_area, vars_metadata, compare_st
     
     stations = vars_metadata['Name'].dropna()
     providers = vars_metadata['Provider'].dropna()
-
 
     era5_geo_locs = xr.Dataset(coords=era5_coor)
     regrid_era5_geo_locs = xr.Dataset(coords=regrid_era5_coor)
@@ -777,13 +798,13 @@ def plot_grid_locations(ref_lats, ref_lons, inter_locs):
     plt.show()
 
 
-def plot_time_series_1var(data, x_label, y_label, fig_size=[6.4, 4.8], fig_title="", fname_save="", 
-                          face_color ='#808080', txt_box_loc = [1.1, 1.1]):
+def plot_time_series_1var(data, x_label, y_label, fig_size=[6.4, 4.8], plot_style='line', fig_title="", fname_save="", 
+                          face_color ='#808080', txt_box_loc = [1.1, 1.1], xlabel_rot=45,long_term=False):
     '''
     Time series scatter plot
     
     Parameters:
-        data: list of pd.DataFrame, one for more data to plot
+        data: list of pd.DataFrame, one for more columns of data to plot
         x_variable: str, name of variables to plot in x_axis
         y_variable: str, name of variables to plot in y_axis
 
@@ -794,21 +815,25 @@ def plot_time_series_1var(data, x_label, y_label, fig_size=[6.4, 4.8], fig_title
 
     fig, ax = plt.subplots(1, figsize=fig_size)
     # ax.scatter(data[x_label], data[y_label], marker='.')
-    ax.scatter(data[x_label], data[y_label], s=4, c=face_color)
+    if plot_style=='line':
+        ax.plot(data[x_label], data[y_label], color=face_color, linestyle='-', linewidth=0.7)
+    else:
+        ax.scatter(data[x_label], data[y_label], s=4, c=face_color)
 
     # fig.autofmt_xdate()
-    ax.fmt_xdata = mdates.DateFormatter('%Y-%m-%d')
-    ax.xaxis.set_major_locator(mdates.DayLocator(bymonthday=1))
-
-    # -------------------------------------------------
-    # STATISTICS BOX
-    # -------------------------------------------------
+    if long_term==False:
+        ax.fmt_xdata = mdates.DateFormatter('%Y-%m-%d')
+        ax.xaxis.set_major_locator(mdates.DayLocator(bymonthday=1))
+    else:
+        ax.fmt_xdata = mdates.DateFormatter('%Y-%m-%d')
+        ax.xaxis.set_major_locator(mdates.YearLocator(1, month=1, day=1))
+        # ax.set_xlim(1979, 2025)
     data_stats = data[y_label].describe()
     stats_text = (
-        f"N = {data_stats['count']:.0f}\n"
-        f"MEAN = {data_stats['mean']:.2f}\n"
-        f"MAX = {data_stats['max']:.2f}\n"
-        f"STD = {data_stats['std']:.2f}\n"
+        f"N = {data_stats['count']:.0f}{nl} "
+        f"MEAN = {data_stats['mean']:.2f}{nl}  "
+        f"MAX = {data_stats['max']:.2f}{nl}  "
+        f"STD = {data_stats['std']:.2f}{nl}  "
         f"NAN = {data[y_label].isnull().sum():.0f}"
     )
 
@@ -819,9 +844,10 @@ def plot_time_series_1var(data, x_label, y_label, fig_size=[6.4, 4.8], fig_title
         fontsize=9,
         bbox=dict(boxstyle="round", fc="white", ec="black")
     )
-
+    plt.margins(x=0)
+    # ax.set_xlim([1979, 2025])
     plt.ylabel(y_label)
-    plt.xticks(rotation=45, ha='right')
+    plt.xticks(rotation=xlabel_rot, ha='right')
     plt.title(fig_title) 
     # plt.show()
     plt.tight_layout()
@@ -830,9 +856,9 @@ def plot_time_series_1var(data, x_label, y_label, fig_size=[6.4, 4.8], fig_title
         fig.savefig(fname_save, dpi=300, bbox_inches="tight")
 
 
-def plot_time_series_2vars(data, data1_label, data2_label, fig_size=[6.4, 4.8], fig_title="", fname_save="", 
-                           fc1 ='#808080', fc2 ='#069AF3', txt_loc1 = [0.05, 0.95], txt_loc2= [0.05, 0.87], 
-                           plot_type='scatter', lstyle1 = '-', lstyle2='--', ylabel_text='Hs', xtick_rotation=45):
+def plot_time_series_2vars(data, data1_label, data2_label, fig_size=[9, 6], fig_title="", fname_save="", 
+                           fc1 ='#808080', fc2 ='#069AF3', txt_loc1 = [0.03, 0.99], txt_loc2= [0.03, 0.93], 
+                           plot_type='scatter', lstyle1 = '-', lstyle2='--', ylabel_text='Hs', xtick_rotation=45, long_term=False):
     '''
     Scatter plot of 2 time series data for visually comparisons.
     Refer to Figure 2.13 DHI report
@@ -852,7 +878,7 @@ def plot_time_series_2vars(data, data1_label, data2_label, fig_size=[6.4, 4.8], 
     '''
 
     df_columns = data.columns.tolist()
-    data = data.dropna()
+    # data = data.dropna()
 
     # figure plot
     fig, ax = plt.subplots(1, figsize=fig_size)
@@ -860,17 +886,15 @@ def plot_time_series_2vars(data, data1_label, data2_label, fig_size=[6.4, 4.8], 
         fc1 = '#808080'
         fc2 ='#069AF3'
 
-        # -------------------------------------------------
-        # STATISTICS BOX
-        # -------------------------------------------------
-        data1_stats = data.iloc[:,1].describe()
+        # Stats box   
+        data1_stats = data.dropna().iloc[:,1].describe()
         stats1_text = (
             f"{data1_label}: "
             f"N = {data1_stats['count']:.0f}, "
             f"MEAN = {data1_stats['mean']:.2f}, "
             f"MAX = {data1_stats['max']:.2f}, "
             f"STD = {data1_stats['std']:.2f}, "
-            f"NAN = {data.iloc[:,1].isnull().sum():.0f}"
+            # f"NAN = {data.iloc[:,1].isnull().sum():.0f}"
         )
 
         data2_stats = data.iloc[:,2].describe()
@@ -880,68 +904,50 @@ def plot_time_series_2vars(data, data1_label, data2_label, fig_size=[6.4, 4.8], 
             f"MEAN = {data2_stats['mean']:.2f}, "
             f"MAX = {data2_stats['max']:.2f}, "
             f"STD = {data2_stats['std']:.2f}, "
-            f"NAN = {data.iloc[:,2].isnull().sum():.0f}"
+            # f"NAN = {data.iloc[:,2].isnull().sum():.0f}"
         )
 
-        # -------------------------------------------------
-        # PLOT
-        # -------------------------------------------------
+        # Plot
         ax.scatter(data.iloc[:,0], data.iloc[:,1], s=4, c=fc1)
         ax.scatter(data.iloc[:,0], data.iloc[:,2], s=4, c=fc2)
-        ax.text(
-        txt_loc1[0], txt_loc1[1], stats1_text,
-        transform=ax.transAxes,
-        ha="left", va="top",
-        fontsize=9, c = fc1
-        
-        )
-        ax.text(
-            txt_loc2[0], txt_loc2[1], stats2_text,
-            transform=ax.transAxes,
-            ha="left", va="top",
-            fontsize=9, c=fc2
-            # bbox=dict(boxstyle=None, fc="white", ec=None)
-        )
-
+        ax.text(txt_loc1[0], txt_loc1[1], stats1_text, transform=ax.transAxes, ha="left", va="top", fontsize=9, c=fc1)
+        ax.text(txt_loc2[0], txt_loc2[1], stats2_text, transform=ax.transAxes, ha="left", va="top", fontsize=9, c=fc2)
 
     elif plot_type=='MIT':
+        # Stats box 
+        data1for_stats = data.dropna()
 
-        # -------------------------------------------------
-        # STATISTICS BOX
-        # -------------------------------------------------
-        N = len(data)
-        bias = np.mean(data.iloc[:,2] - data.iloc[:,1])
-        mse = np.mean(np.abs(data.iloc[:,2] - data.iloc[:,1])**2)
-        rmse = np.sqrt(np.mean((data.iloc[:,2] - data.iloc[:,1]) ** 2))
-        cc = np.corrcoef(data.iloc[:,2],data.iloc[:,1])[0, 1]
+        N = len(data1for_stats)
+        bias = np.mean(data1for_stats.iloc[:,2] - data1for_stats.iloc[:,1])
+        mse = np.mean(np.abs(data1for_stats.iloc[:,2] - data1for_stats.iloc[:,1])**2)
+        rmse = np.sqrt(np.mean((data1for_stats.iloc[:,2] - data1for_stats.iloc[:,1]) ** 2))
+        cc = np.corrcoef(data1for_stats.iloc[:,2],data1for_stats.iloc[:,1])[0, 1]
 
+        # long line, new line {nl}
         stats_text = (
-            f"MSE = {mse:.3f} {nl}"
-            f"RMSE = {rmse:.3f} {nl}"
-            f"Bias = {bias:.3f} {nl}"
-            f"Corr = {cc:.3f} {nl}"
+            f"MSE = {mse:.3f}, "
+            f"RMSE = {rmse:.3f}, "
+            f"Bias = {bias:.3f}, "
+            f"Corr = {cc:.3f}, "
             f"Matches = {N:.0f}"
         )
 
-        # -------------------------------------------------
-        # PLOT
-        # -------------------------------------------------
+        # Plot
         ax.plot(data.iloc[:,0], data.iloc[:,1], linestyle=lstyle1, c=fc1, linewidth=1.5, label=data1_label)
         ax.plot(data.iloc[:,0], data.iloc[:,2], linestyle=lstyle2, c=fc2, linewidth=1.5, label=data2_label)
-        ax.text(
-        txt_loc1[0], txt_loc1[1], stats_text,
-        transform=ax.transAxes,
-        ha="left", va="top",
-        fontsize=9, c = 'k',
-        bbox=dict(boxstyle='round', facecolor='none')
-        )
-
+        # no box around annotation
+        ax.text(txt_loc1[0], txt_loc1[1], stats_text, transform=ax.transAxes,
+            ha="left", va="top", fontsize=9, c = 'k')
+        # ax.text(txt_loc1[0], txt_loc1[1], stats_text, transform=ax.transAxes,
+        #     ha="left", va="top", fontsize=9, c = 'k', bbox=dict(boxstyle='round', facecolor='none'))
         ax.grid(visible=True, c="lightgrey")
         ax.legend()
-
-
-    ax.fmt_xdata = mdates.DateFormatter('%Y-%m-%d')
-    ax.xaxis.set_major_locator(mdates.DayLocator(bymonthday=1))
+    if long_term==False:
+        ax.fmt_xdata = mdates.DateFormatter('%Y-%m-%d')
+        ax.xaxis.set_major_locator(mdates.DayLocator())
+    else:
+        ax.fmt_xdata = mdates.DateFormatter('%Y-%m-%d')
+        ax.xaxis.set_major_locator(mdates.YearLocator(1, month=1, day=1))
 
     if ylabel_text != '':
         plt.ylabel(ylabel_text)
@@ -951,10 +957,11 @@ def plot_time_series_2vars(data, data1_label, data2_label, fig_size=[6.4, 4.8], 
     plt.title(fig_title) 
     plt.tight_layout()
     plt.subplots_adjust(bottom=0.15)
+    # plt.margins(x=0)
+    # fig.legend(loc='outside upper right', ncols=3)
     # plt.show()
 
-    if fname_save != "":
-        fig.savefig(fname_save, dpi=600, bbox_inches="tight")
+    if fname_save != "": fig.savefig(fname_save, dpi=600, bbox_inches="tight")
 
 def truncate_colormap(cmap_name, minval=0.0, maxval=1.0, n=100):
     """

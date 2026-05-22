@@ -66,9 +66,8 @@ time_stamp = '관측시간'
 param_checking = '조위(cm)'
 vars_type = [time_stamp, '조위(cm)']
 
-year = 2023 # fix for now, will change accordingly
+year = 2024 # fix for now, will change accordingly
 simul_flder_name = f'simulation_July2023'
-start_reading_idx_fort61 = 432000
 dir_save_fig = 'D:\\InProbation\\Metocean\\Analysis\\Obs_Modeled\\Water\\' + simul_flder_name + '\\'
 os.makedirs(dir_save_fig, exist_ok=True)
 
@@ -80,6 +79,7 @@ hotfolders = [f.name for f in Path(dir_simul).rglob(f'hot_*') if f.is_dir()]
 
 #%% ####################################################################################################
 # April 30, 2026: Working with modeled water elevation data
+
 
 all_obs_data = dict()
 
@@ -128,37 +128,36 @@ for si in range(len(wl_stations)):
 
 
 #%% load modelled data separatedly for each 'hot_' folder
-dir_save_fig = 'D:\\InProbation\\Metocean\\Analysis\\Obs_Modeled\\Water\\' + simul_flder_name + '_separate\\'
-os.makedirs(dir_save_fig, exist_ok=True)
+# dir_save_fig = 'D:\\InProbation\\Metocean\\Analysis\\Obs_Modeled\\Water\\' + simul_flder_name + '_separate\\'
+# os.makedirs(dir_save_fig, exist_ok=True)
 
-for fi, flder in enumerate(hotfolders):
-    # May 13, to be replaced later
-    # start_simul_time = pd.to_datetime(f'{flder[4:8]}-{flder[8:10]}-{flder[10:12]} 00:00:00', format="%Y-%m-%d %H:%M:%S")
+# for fi, flder in enumerate(hotfolders):
+#     # May 13, to be replaced later
+#     start_simul_time = pd.to_datetime(f'{flder[4:8]}-{flder[8:10]}-{flder[10:12]} 00:00:00', format="%Y-%m-%d %H:%M:%S")
 
-    dir_hot = dir_simul + flder + '\\'
-    # modeled data will be shifted to KST time by default, it not set to_kst=False
-    simul_time = read_fort26(dir_hot)
-    # all_modeled_data = load_fort61(dir_hot, simul_time['start'], col_names=[time_stamp, param_checking], skip_first_day=True)
+#     dir_hot = dir_simul + flder + '\\'
+#     # modeled data will be shifted to KST time by default, it not set to_kst=False
+#     # simul_time = read_fort26(dir_hot)
+#     # all_modeled_data = load_fort61(dir_hot, simul_time['start'], col_names=[time_stamp, param_checking], skip_first_day=True)
 
-    all_modeled_data = load_fort61(dir_hot, simul_time['start'], time_from_fort26=True,
-                                   col_names=[time_stamp, param_checking], skip_first_day=False)
-    for si in range(len(wl_stations)):
+#     all_modeled_data = load_fort61(dir_hot, start_simul_time, col_names=[time_stamp, param_checking], skip_first_day=False)
+#     for si in range(len(wl_stations)):
 
-        df_combine = pd.merge(all_obs_data[wl_stations['Name'][si]], all_modeled_data[wl_stations['Name'][si]], 
-                            on=time_stamp, how='right', suffixes=['_obs', '_modeled'])
+#         df_combine = pd.merge(all_obs_data[wl_stations['Name'][si]], all_modeled_data[wl_stations['Name'][si]], 
+#                             on=time_stamp, how='right', suffixes=['_obs', '_modeled'])
 
-        fname_save = f'{flder}_{wl_stations["Name"][si]}'
-        ylabel_text = 'Water level (cm)'
-        fig_title = f'{wl_stations["Name"][si]}, {df_combine.iloc[0,0].date()} - {df_combine.iloc[-1,0].date()}'
-        plot_time_series_2vars(df_combine,
-                            'Observation', 'Modeled', [9, 4], fig_title, dir_save_fig +  fname_save,
-                            fc1='#F67A0D', fc2='#3C88BD', plot_type='MIT', lstyle1 = '-', lstyle2='--',
-                            ylabel_text=ylabel_text, xtick_rotation=45)
+#         fname_save = f'{flder}_{wl_stations["Name"][si]}'
+#         ylabel_text = 'Water level (cm)'
+#         fig_title = f'{wl_stations["Name"][si]}, {df_combine.iloc[0,0].date()} - {df_combine.iloc[-1,0].date()}'
+#         plot_time_series_2vars(df_combine,
+#                             'Observation', 'Modeled', [9, 4], fig_title, dir_save_fig +  fname_save,
+#                             fc1='#F67A0D', fc2='#3C88BD', plot_type='MIT', lstyle1 = '-', lstyle2='--',
+#                             ylabel_text=ylabel_text, xtick_rotation=45)
         
-        # scatter_plot_ERA5_against_meas(df_combine[[time_stamp, param_checking+'_obs', param_checking+'_modeled']], 
-        #                         [9,6], [0, np.max([250, df_combine.iloc[:,1].max()+5, df_combine.iloc[:,2].max()+5])], 
-        #                         bin_width=10, x_tick=50, fig_title=fig_title, fname_save = dir_save_fig +  fname_save+'_scatter')
-        df_combine.to_excel(dir_save_fig + f'{wl_stations["Name"][si]}_{flder}.xlsx')
+#         # scatter_plot_ERA5_against_meas(df_combine[[time_stamp, param_checking+'_obs', param_checking+'_modeled']], 
+#         #                         [9,6], [0, np.max([250, df_combine.iloc[:,1].max()+5, df_combine.iloc[:,2].max()+5])], 
+#         #                         bin_width=10, x_tick=50, fig_title=fig_title, fname_save = dir_save_fig +  fname_save+'_scatter')
+#         df_combine.to_excel(dir_save_fig + f'{wl_stations["Name"][si]}_{flder}.xlsx')
 
 #         #% ####################################################################################################
 #         # TIDAL HARMONICS ANALYSIS FOR OBSERVATION AND MODELED DATA
@@ -187,25 +186,24 @@ for fi, flder in enumerate(hotfolders):
 
 
 #%% Combine different simulations, May 13, 2026 
-# dir_save_fig = 'D:\\InProbation\\Metocean\\Analysis\\Obs_Modeled\\Water\\' + simul_flder_name + '_combined\\'
-# os.makedirs(dir_save_fig, exist_ok=True)
+dir_save_fig = 'D:\\InProbation\\Metocean\\Analysis\\Obs_Modeled\\Water\\' + simul_flder_name + '_combined\\'
+os.makedirs(dir_save_fig, exist_ok=True)
 for si in range(len(wl_stations)):
     long_data = pd.DataFrame(columns=[time_stamp, f'{param_checking}_obs', f'{param_checking}_modeled'])
 
     for fi, flder in enumerate(hotfolders):
 
-        dir_hot = dir_simul + flder + '\\'
         # May 13, Reading directly from folder's name, when simulation crashed 
         # start_simul_time = pd.to_datetime(f'{flder[4:8]}-{flder[8:10]}-{flder[10:12]} 00:00:00', format="%Y-%m-%d %H:%M:%S")
 
         # Reading directly from fort.26, when simulation finished normally 
         simul_time = read_fort26(dir_hot)
 
-        all_modeled_data = load_fort61(dir_hot, simul_time['start'], time_from_fort26=True,
-                                       col_names=[time_stamp, param_checking], start_reading_idx=start_reading_idx_fort61)
+        dir_hot = dir_simul + flder + '\\'
+        all_modeled_data = load_fort61(dir_hot, start_simul_time, col_names=[time_stamp, param_checking], skip_first_day=False)
         df_combine = pd.merge(all_obs_data[wl_stations['Name'][si]], all_modeled_data[wl_stations['Name'][si]], 
                             on=time_stamp, how='right', suffixes=['_obs', '_modeled'])
-        # combine data for these two simulations
+        # combine data for these teo simulations
         long_data = pd.concat([long_data, df_combine], ignore_index=True).drop_duplicates(subset=[time_stamp], keep='first')
 
     fname_save = f'{wl_stations["Name"][si]}'

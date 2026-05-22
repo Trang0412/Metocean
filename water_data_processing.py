@@ -19,10 +19,12 @@ from visualizing import *
 from geopy.distance import great_circle
 from geopy.distance import geodesic
 from matplotlib import patches as mpatches
+from scipy import signal
 
 
 
-def plot_major_tidal_cons_obs_mdl(df_combine, time_stamp, param_checking, wl_station, major_tidal_conts, fname1, fname2):
+def plot_major_tidal_cons_obs_mdl(df_combine, time_stamp, param_checking, wl_station, major_tidal_conts, dir_save_fig, fname1, fname2, 
+                                  save_coef=['M2', 'K1', 'O1', 'S2']):
     '''Plot the tidal constituents from observation and modelled data
     Parameters:
         -df_combine: pd.DataFrame, dataframe of water level with 3 columns of [time_stamp, observation, modelled]
@@ -56,17 +58,20 @@ def plot_major_tidal_cons_obs_mdl(df_combine, time_stamp, param_checking, wl_sta
                 color='#F67A0D', linestyle='-')
     ax2.plot(mdl_data[time_stamp], mdl_data['res'], 
                 color='#3C88BD', linestyle='--')
-    ax2.set_title('Residual',fontsize=10 )
+    ax2.set_title('Residual', fontsize=10 )
     
     # ax2.set_ylim(-200, 200)
     fig1.suptitle(f'{wl_station["Name"]}', fontsize=14, fontweight='bold')
-    fig1.legend(ncol=3, loc="upper right")
+    fig1.legend(ncol=3, loc="outside upper right")
     plt.xticks(rotation=45)
     if fname1!='':
-        plt.savefig(fname1)
+        plt.savefig(dir_save_fig+fname1)
 
     # check coefficients consistency
-    common_consts =  np.intersect1d(obs_coefs['name'], mdl_coefs['name'])
+    common_consts = np.intersect1d(obs_coefs['name'], mdl_coefs['name'])
+    if len(save_coef):
+        common_consts = np.intersect1d(common_consts, save_coef)
+    
     major_consts_obs = dict()
     major_consts_mdl = dict()
     if len(common_consts):
@@ -77,23 +82,36 @@ def plot_major_tidal_cons_obs_mdl(df_combine, time_stamp, param_checking, wl_sta
         obs_g = dict([(obs_coefs['name'][i], obs_coefs['g'][i]) for i in range(len(obs_coefs['name'])) if obs_coefs['name'][i] in common_consts])
         mdl_g = dict([(mdl_coefs['name'][i], mdl_coefs['g'][i]) for i in range(len(mdl_coefs['name'])) if mdl_coefs['name'][i] in common_consts])
 
-        fig2, (ax0, ax1) = plt.subplots(figsize=(9,6), nrows=2)
+        if len(save_coef):
+            save_coef_df = pd.DataFrame(columns=['name', 'amp_obs', 'amp_mdl', 'phase_obs', 'phase_mdl'])
+            save_coef_df['name'] = list(obs_a.keys())
+            save_coef_df['amp_obs'] = list(obs_a.values())
+            save_coef_df['amp_mdl'] = list(mdl_a.values())
+            save_coef_df['phase_obs'] = list(obs_g.values())
+            save_coef_df['phase_mdl'] = list(mdl_g.values())
+            save_coef_df.to_excel(f'{dir_save_fig}UTide_coefs{wl_station["Name"]}.xlsx')
+
+        fig2, (ax0, ax1) = plt.subplots(figsize=(9, 6), nrows=2)
         ax0.plot(list(obs_a.keys()), list(obs_a.values()), label='Observation',
                     marker='o', color='#F67A0D', linestyle='-')
         ax0.plot(list(mdl_a.keys()), list(mdl_a.values()), label='Modeled', 
                     marker='o', color='#3C88BD', linestyle='--')
         ax0.set_title('Amplitude',fontsize=10)
-        ax0.legend()
+        # ax0.legend()
 
-        ax1.plot(list(obs_g.keys()), list(obs_g.values()), label='Observation',
+        # ax1.plot(list(obs_g.keys()), list(obs_g.values()), label='Observation',
+        #             marker='o', color='#F67A0D', linestyle='-')
+        # ax1.plot(list(mdl_g.keys()), list(mdl_g.values()), label='Modeled', 
+        #             marker='o', color='#3C88BD', linestyle='--')
+        ax1.plot(list(obs_g.keys()), list(obs_g.values()),
                     marker='o', color='#F67A0D', linestyle='-')
-        ax1.plot(list(mdl_g.keys()), list(mdl_g.values()), label='Modeled', 
+        ax1.plot(list(mdl_g.keys()), list(mdl_g.values()), 
                     marker='o', color='#3C88BD', linestyle='--')
         ax1.set_title('Phase',fontsize=10)
         fig2.suptitle(f'{wl_station["Name"]}, amplitude and phase of tidal consituents', fontsize=14)
-
+        fig2.legend(ncol=3, loc="outside upper right")
         if fname2!='':
-            plt.savefig(fname2)
+            plt.savefig(dir_save_fig+fname2)
 
         # reconstruct major tidal consituents
         for consti in major_tidal_conts:
@@ -131,17 +149,6 @@ def separate_tide_nontide(water_data, lat):
     #     verbose=False,
     # )
 
-    # # gemini suggested for short time
-    # coef = utide.solve(
-    #     water_data.iloc[:,0].values,
-    #     water_data['anomaly'],
-    #     lat=lat,
-    #     method="ols",
-    #     # conf_int="auto",
-    #     constit='auto',
-    #     verbose=False,
-    # )
-
     # gemini suggested for short time
     coef = utide.solve(
         water_data.iloc[:,0].values,
@@ -149,9 +156,20 @@ def separate_tide_nontide(water_data, lat):
         lat=lat,
         method="ols",
         # conf_int="auto",
-        constit=khoa_tidal_consts,
+        constit='auto',
         verbose=False,
     )
+
+    # # gemini suggested for short time
+    # coef = utide.solve(
+    #     water_data.iloc[:,0].values,
+    #     water_data['anomaly'],
+    #     lat=lat,
+    #     method="ols",
+    #     # conf_int="auto",
+    #     constit=khoa_tidal_consts,
+    #     verbose=False,
+    # )
 
 
     tide = utide.reconstruct(water_data.iloc[:,0].values, coef, verbose=False)
@@ -208,3 +226,23 @@ def remove_water_trend(water_data):
     ax2.title('Linear trend estimated from yearly mean data')
     plt.show()
 
+
+# Temporary May 13, 2026
+def do_water_QC(data):
+    '''
+    Assign peaks (change in 1 minute interval larger than 5 cm)
+    Return:
+        -wind_data: pd.DataFrame, wind data with quality controlled
+    '''
+    time_stamp = data.columns[0]
+    data = data.set_index(time_stamp)
+
+    changes = data.diff()
+    data_interval = data.index.to_series().diff().dropna().unique() 
+    if len(data_interval)>1: print('There more than 1 intervals of recording data')
+    if data_interval[0]==1:  data[changes.abs() > 5] = pd.NA
+    data = data.reset_index()
+
+    return data
+
+# %%

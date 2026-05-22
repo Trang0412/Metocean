@@ -27,15 +27,15 @@ import os
 
 
 # request for 50 years of data, from 1976 to 2025
-years_in_request = np.arange(2024,2026,1)
+years_in_request = np.arange(1979,2022,1)
 months = np.arange(1,13,1)
 
 # CDS client and dataset
 request = {
     "product_type": ["reanalysis"],
     "variable": [
-        "100m_u_component_of_wind",
-        "100m_v_component_of_wind",
+        #"100m_u_component_of_wind",
+        #"100m_v_component_of_wind",
         "mean_sea_level_pressure",
         "10m_u_component_of_wind",
         "10m_v_component_of_wind",

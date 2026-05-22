@@ -355,9 +355,7 @@ def find_duplicate(data, time_stamp):
 
     return idxs_to_remove
 
-
-
-    
+   
 def quality_control(data, data_type, fixed_qc_criteria, data_interval, station, provider, checking_year, logger):
     '''
     QC procedure
