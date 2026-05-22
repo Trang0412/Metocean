@@ -1,0 +1,14 @@
+# ignore python cache
+__pycache__/
+
+#ignore vscode setting
+.vscode/
+
+extreme_conditions/
+.ipynb_checkpoints/
+.virtual_documents/
+in_dev/
+temp/
+
+normal_conditions/
+.ipynb_checkpoints/
